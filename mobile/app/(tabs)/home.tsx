@@ -1,77 +1,93 @@
 /**
  * Home.
  *
- * Answers, in order, the four questions someone opens a payments app to ask:
- * what can I spend, what is being held, what needs me right now, and what just
- * happened. Anything that needs a decision is surfaced as an action card near
- * the top; everything else is one tap away.
+ * Deliberately not a balance screen. Money lives in the wallet, behind the
+ * unlock; opening the app in public should not put a number on screen that
+ * whoever is standing beside you can read. So home answers the other question
+ * a person opens this app to ask: what needs me, and what moved.
+ *
+ * The order follows demand on attention - things waiting on the user first,
+ * then the actions they reach for most, then work in progress, then history.
+ * Recent activity shows what happened and when, but not how much; the amount is
+ * one tap away in the wallet, where it is unlocked deliberately.
  */
 
 import { useRouter } from 'expo-router';
 import React from 'react';
-import { RefreshControl, View } from 'react-native';
-import Animated, { FadeIn } from 'react-native-reanimated';
+import { RefreshControl, ScrollView, View } from 'react-native';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { TAB_BAR_CLEARANCE } from './_layout';
 
-import { useBalanceReveal } from '@/components/BalanceLock';
-import { LogoMark } from '@/components/Logo';
-import { ProjectCard, TransactionRow } from '@/components/product';
+import { ProjectCard } from '@/components/product';
+import { EngineBadge } from '@/components/rich';
 import {
-  ActionGrid,
-  Avatar,
-  BalanceHeader,
-  EngineBadge,
-  InsightCarousel,
-  PeopleRow,
-  StatStrip,
-} from '@/components/rich';
+  Chip,
+  CircleButton,
+  SoftAction,
+  SoftCard,
+  SoftSection,
+} from '@/components/soft';
 import {
-  Badge,
   Button,
-  Card,
-  Divider,
   EmptyState,
   ErrorState,
-  IconButton,
   Row,
   Screen,
-  SectionHeader,
   Skeleton,
   Txt,
 } from '@/components/ui';
-import { formatCompact } from '@/lib/money';
 import {
   useAiStatus,
   useNotifications,
   useProjects,
   useTransactions,
   useTrustScore,
-  useWallet,
 } from '@/lib/queries';
 import { useAuth } from '@/store/auth';
 import { useTheme } from '@/theme';
 
+/** "3d ago" beats a timestamp nobody reads. */
+function ago(iso: string): string {
+  const seconds = Math.max(1, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (seconds < 60) return 'just now';
+  const minutes = seconds / 60;
+  if (minutes < 60) return Math.floor(minutes) + 'm ago';
+  const hours = minutes / 60;
+  if (hours < 24) return Math.floor(hours) + 'h ago';
+  const days = hours / 24;
+  if (days < 7) return Math.floor(days) + 'd ago';
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: 'numeric',
+    month: 'short',
+  });
+}
+
+const ACTIVITY_GLYPH: Record<string, string> = {
+  TOP_UP: '↓',
+  WITHDRAWAL: '↑',
+  MILESTONE_FUNDING: '◈',
+  PAYMENT_RELEASE: '✓',
+  REFUND: '↩',
+  FEE: '%',
+};
+
 export default function Home() {
   const router = useRouter();
-  const { colors, spacing } = useTheme();
+  const { colors, spacing, radius } = useTheme();
   const insets = useSafeAreaInsets();
   const user = useAuth((state) => state.user);
 
-  const wallet = useWallet();
   const projects = useProjects();
-  const transactions = useTransactions(5);
+  const transactions = useTransactions(6);
   const trustScore = useTrustScore();
   const notifications = useNotifications();
   const aiStatus = useAiStatus();
-  const lock = useBalanceReveal();
 
-  const refreshing =
-    wallet.isRefetching || projects.isRefetching || transactions.isRefetching;
+  const refreshing = projects.isRefetching || transactions.isRefetching;
 
   const refreshAll = () => {
-    wallet.refetch();
     projects.refetch();
     transactions.refetch();
     trustScore.refetch();
@@ -89,26 +105,20 @@ export default function Home() {
       project.status === 'AWAITING_ACCEPTANCE' && project.your_role === 'RECEIVER',
   );
 
-  const counterparties = items
-    .map((project) =>
-      project.your_role === 'CLIENT' ? project.receiver : project.client,
-    )
-    .filter((party): party is { id: string; full_name: string } => Boolean(party))
-    .filter(
-      (party, index, all) => all.findIndex((other) => other.id === party.id) === index,
-    )
-    .slice(0, 8);
-
   const unread = notifications.data?.unread ?? 0;
   const firstName = user?.full_name.split(' ')[0] ?? 'there';
+  const completed = items.reduce(
+    (total, project) => total + project.milestones_completed,
+    0,
+  );
 
-  if (wallet.isError) {
+  if (projects.isError) {
     return (
       <Screen>
         <ErrorState
-          title="Unable to load your wallet"
-          message={wallet.error.message}
-          onRetry={() => wallet.refetch()}
+          title="Unable to load your projects"
+          message={projects.error.message}
+          onRetry={() => projects.refetch()}
         />
       </Screen>
     );
@@ -119,244 +129,200 @@ export default function Home() {
       contentStyle={{
         paddingTop: insets.top + spacing.sm,
         paddingBottom: TAB_BAR_CLEARANCE + insets.bottom,
+        gap: spacing.xxl,
       }}
       refreshControl={
         <RefreshControl refreshing={refreshing} onRefresh={refreshAll} />
       }
     >
-      {/* Header */}
+      {/* ------------------------------------------------------------ header */}
       <Row style={{ justifyContent: 'space-between' }}>
+        <View style={{ gap: 2 }}>
+          <Txt variant="caption" tone="tertiary">
+            {new Date().toLocaleDateString(undefined, {
+              weekday: 'long',
+              day: 'numeric',
+              month: 'long',
+            })}
+          </Txt>
+          <Txt variant="h1">{firstName}</Txt>
+        </View>
+
         <Row gap={spacing.sm}>
-          <Avatar name={user?.full_name ?? 'You'} size={38} />
-          <View>
-            <Txt variant="caption" tone="secondary">
-              Welcome back
-            </Txt>
-            <Txt variant="h3">{firstName}</Txt>
-          </View>
-        </Row>
-        <Row gap={spacing.sm}>
-          <IconButton
+          <CircleButton
             glyph="✦"
             accessibilityLabel="Ask the TrustPay assistant"
-            tone="brand"
             onPress={() => router.push('/assistant')}
           />
-          <IconButton
-            glyph="◔"
-            accessibilityLabel={`Notifications${unread ? `, ${unread} unread` : ''}`}
-            tone={unread ? 'danger' : 'neutral'}
-            onPress={() => router.push('/(tabs)/activity')}
-          />
+          <View>
+            <CircleButton
+              glyph="◔"
+              accessibilityLabel={
+                'Notifications' + (unread ? ', ' + unread + ' unread' : '')
+              }
+              onPress={() => router.push('/(tabs)/activity')}
+            />
+            {unread ? (
+              <View
+                style={{
+                  position: 'absolute',
+                  top: -1,
+                  right: -1,
+                  minWidth: 18,
+                  height: 18,
+                  paddingHorizontal: 5,
+                  borderRadius: 9,
+                  backgroundColor: colors.danger,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderWidth: 2,
+                  borderColor: colors.background,
+                }}
+              >
+                <Txt style={{ color: colors.onBrand, fontSize: 10, lineHeight: 13 }}>
+                  {Math.min(unread, 9)}
+                </Txt>
+              </View>
+            ) : null}
+          </View>
         </Row>
       </Row>
 
-      {/* Balance */}
-      {wallet.isLoading || !wallet.data ? (
-        <Card>
-          <Skeleton height={20} width="45%" />
-          <View style={{ height: spacing.md }} />
-          <Skeleton height={42} width="70%" />
-          <View style={{ height: spacing.lg }} />
-          <Skeleton height={56} />
-        </Card>
-      ) : (
-        <BalanceHeader
-          available={wallet.data.available}
-          protectedAmount={wallet.data.protected}
-          pending={wallet.data.pending_settlement}
-          currency={wallet.data.currency}
-          demoMode={wallet.data.demo_mode}
-          trustScore={trustScore.data?.score}
-          onPressTrust={() => router.push('/trust-score')}
-          unlocked={lock.unlocked}
-          checking={lock.checking}
-          onToggleBalance={lock.reveal}
-        />
-      )}
-
-      {/* Actions */}
-      <ActionGrid
-        actions={[
-          {
-            key: 'add',
-            label: 'Add money',
-            glyph: '＋',
-            onPress: () => router.push('/wallet/add-money'),
-          },
-          {
-            key: 'project',
-            label: 'New project',
-            glyph: '◫',
-            onPress: () => router.push('/project/create'),
-          },
-          {
-            key: 'withdraw',
-            label: 'Withdraw',
-            glyph: '↑',
-            onPress: () => router.push('/wallet/withdraw'),
-            tone: 'neutral',
-          },
-          {
-            key: 'trust',
-            label: 'Trust Score',
-            glyph: '✦',
-            onPress: () => router.push('/trust-score'),
-            tone: 'success',
-          },
-          {
-            key: 'disputes',
-            label: 'Disputes',
-            glyph: '⚖',
-            onPress: () => router.push('/dispute/list'),
-            tone: 'warning',
-          },
-          {
-            key: 'activity',
-            label: 'Activity',
-            glyph: '◷',
-            onPress: () => router.push('/(tabs)/activity'),
-            tone: 'info',
-            badge: unread ? String(Math.min(unread, 9)) : undefined,
-          },
-          {
-            key: 'assistant',
-            label: 'Assistant',
-            glyph: '✦',
-            onPress: () => router.push('/assistant'),
-            tone: 'brand',
-          },
-          {
-            key: 'wallet',
-            label: 'Statement',
-            glyph: '₹',
-            onPress: () => router.push('/(tabs)/wallet'),
-            tone: 'neutral',
-          },
-        ]}
-      />
-
-      {/* Waiting on you */}
+      {/* --------------------------------------------------- waiting on you */}
       {needsYou.length > 0 ? (
-        <Animated.View entering={FadeIn.duration(240)} style={{ gap: spacing.md }}>
-          <SectionHeader title="Waiting on you" />
+        <Animated.View entering={FadeInDown.duration(260)} style={{ gap: spacing.md }}>
+          <SoftSection title="waiting on you" />
           {needsYou.map((project) => (
-            <Card
-              key={project.id}
-              style={{ borderColor: colors.brand, borderWidth: 1.5 }}
-            >
+            <SoftCard key={project.id}>
               <Row style={{ justifyContent: 'space-between' }}>
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, paddingRight: spacing.md }}>
                   <Txt variant="bodyStrong" numberOfLines={1}>
                     {project.title}
                   </Txt>
                   <Txt variant="caption" tone="secondary">
-                    {project.client.full_name} invited you
+                    {project.client?.full_name} invited you
                   </Txt>
                 </View>
-                <Badge label="Review" tone="brand" />
+                <Chip label="review" tone="warning" />
               </Row>
-              <View style={{ marginTop: spacing.md }}>
+              <View style={{ marginTop: spacing.lg }}>
                 <Button
                   title="Review invitation"
-                  onPress={() => router.push(`/project/${project.id}`)}
+                  onPress={() => router.push('/project/' + project.id)}
                 />
               </View>
-            </Card>
+            </SoftCard>
           ))}
         </Animated.View>
       ) : null}
 
-      {/* Portfolio at a glance */}
-      {wallet.data ? (
-        <StatStrip
-          items={[
-            {
-              label: 'Active',
-              value: String(active.length),
-              tone: 'brand',
-            },
-            {
-              label: 'Protected',
-              value: lock.unlocked
-                ? formatCompact(wallet.data.protected, wallet.data.currency)
-                : '••••',
-              tone: 'primary',
-            },
-            {
-              label: 'Trust',
-              value: trustScore.data ? String(trustScore.data.score) : '—',
-              tone: 'success',
-            },
-          ]}
-        />
-      ) : null}
-
-      {/* People */}
-      {counterparties.length > 0 ? (
-        <View style={{ gap: spacing.xs }}>
-          <SectionHeader title="People you work with" />
-          <PeopleRow
-            people={counterparties.map((party) => ({
-              id: party.id,
-              name: party.full_name,
-            }))}
-            onPress={() => router.push('/(tabs)/projects')}
-            onAdd={() => router.push('/project/create')}
+      {/* ----------------------------------------------------------- actions */}
+      <View>
+        <SoftSection title="shortcuts" />
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ gap: spacing.md, paddingHorizontal: spacing.xs }}
+        >
+          <SoftAction
+            glyph="＋"
+            label="Add money"
+            emphasis
+            onPress={() => router.push('/wallet/add-money')}
           />
-        </View>
-      ) : null}
+          <SoftAction
+            glyph="◫"
+            label="New project"
+            onPress={() => router.push('/project/create')}
+          />
+          <SoftAction
+            glyph="↑"
+            label="Withdraw"
+            onPress={() => router.push('/wallet/withdraw')}
+          />
+          <SoftAction
+            glyph="⚖"
+            label="Disputes"
+            onPress={() => router.push('/dispute/list')}
+          />
+          <SoftAction
+            glyph="◷"
+            label="Activity"
+            badge={unread ? String(Math.min(unread, 9)) : undefined}
+            onPress={() => router.push('/(tabs)/activity')}
+          />
+          <SoftAction
+            glyph="₹"
+            label="Wallet"
+            onPress={() => router.push('/(tabs)/wallet')}
+          />
+        </ScrollView>
+      </View>
 
-      {/* AI insights */}
-      {trustScore.data ? (
-        <View style={{ gap: spacing.xs }}>
-          <Row style={{ justifyContent: 'space-between' }}>
-            <Txt variant="overline" tone="secondary">
-              TrustPay intelligence
+      {/* ------------------------------------------------------ standing card */}
+      <SoftCard onPress={() => router.push('/trust-score')}>
+        <Row style={{ justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1 }}>
+            <Txt variant="caption" tone="tertiary">
+              Trust Score
             </Txt>
-            <EngineBadge
-              engine={aiStatus.data?.engine}
-              model={aiStatus.data?.model}
-            />
-          </Row>
-          <InsightCarousel
-            items={[
-              {
-                key: 'score',
-                title: `Trust Score ${trustScore.data.score}`,
-                body:
-                  trustScore.data.risk_reasons[0] ??
-                  trustScore.data.positive_reasons[0] ??
-                  'Nothing on your account needs attention.',
-                tone: trustScore.data.risk_reasons.length ? 'warning' : 'success',
-                onPress: () => router.push('/trust-score'),
-              },
-              {
-                key: 'protected',
-                title: 'How protection works',
-                body: 'Money you commit to a milestone leaves your spendable balance and is released only when you approve the work.',
-                tone: 'brand',
-              },
-              {
-                key: 'cancel',
-                title: 'Cancellation protection',
-                body: 'A cancellation needs the receiver to enter a code sent to them. You cannot pull protected funds back on your own.',
-                tone: 'info',
-              },
-            ]}
-          />
-        </View>
-      ) : null}
+            {trustScore.isLoading || !trustScore.data ? (
+              <Skeleton height={44} width="45%" />
+            ) : (
+              <Row gap={spacing.sm} style={{ alignItems: 'baseline' }}>
+                <Txt style={{ fontSize: 40, lineHeight: 48, fontWeight: '400' }}>
+                  {trustScore.data.score}
+                </Txt>
+                <Txt variant="caption" tone="secondary">
+                  {trustScore.data.band_label}
+                </Txt>
+              </Row>
+            )}
+          </View>
+          <EngineBadge engine={aiStatus.data?.engine} model={aiStatus.data?.model} />
+        </Row>
 
-      {/* Active projects */}
-      <View style={{ gap: spacing.md }}>
-        <SectionHeader
-          title="Active projects"
+        <View
+          style={{
+            flexDirection: 'row',
+            marginTop: spacing.lg,
+            borderRadius: radius.lg,
+            backgroundColor: colors.surfaceMuted,
+            paddingVertical: spacing.md,
+          }}
+        >
+          {[
+            { label: 'active', value: String(active.length) },
+            { label: 'completed', value: String(completed) },
+            { label: 'projects', value: String(items.length) },
+          ].map((stat, index) => (
+            <View
+              key={stat.label}
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                borderLeftWidth: index === 0 ? 0 : 1,
+                borderLeftColor: colors.border,
+              }}
+            >
+              <Txt variant="h3">{stat.value}</Txt>
+              <Txt variant="caption" tone="tertiary">
+                {stat.label}
+              </Txt>
+            </View>
+          ))}
+        </View>
+      </SoftCard>
+
+      {/* ---------------------------------------------------------- projects */}
+      <View>
+        <SoftSection
+          title="in progress"
           action={
             items.length > 0 ? (
               <Txt
-                variant="captionStrong"
-                tone="brand"
+                variant="caption"
+                tone="secondary"
                 accessibilityRole="button"
                 onPress={() => router.push('/(tabs)/projects')}
               >
@@ -367,12 +333,12 @@ export default function Home() {
         />
 
         {projects.isLoading ? (
-          <Skeleton height={140} />
+          <Skeleton height={150} />
         ) : active.length === 0 ? (
-          <Card>
+          <SoftCard>
             <EmptyState
               icon="◫"
-              title="No active projects"
+              title="Nothing in progress"
               body="Create a project, agree the milestones, and protect the first payment. You can invite someone even if they are not on TrustPay yet."
               action={
                 <Button
@@ -382,22 +348,24 @@ export default function Home() {
                 />
               }
             />
-          </Card>
+          </SoftCard>
         ) : (
-          active
-            .slice(0, 3)
-            .map((project) => <ProjectCard key={project.id} project={project} />)
+          <View style={{ gap: spacing.lg }}>
+            {active.slice(0, 3).map((project) => (
+              <ProjectCard key={project.id} project={project} />
+            ))}
+          </View>
         )}
       </View>
 
-      {/* Recent activity */}
-      <View style={{ gap: spacing.xs }}>
-        <SectionHeader
-          title="Recent activity"
+      {/* ---------------------------------------------------------- activity */}
+      <View>
+        <SoftSection
+          title="recent"
           action={
             <Txt
-              variant="captionStrong"
-              tone="brand"
+              variant="caption"
+              tone="secondary"
               accessibilityRole="button"
               onPress={() => router.push('/(tabs)/wallet')}
             >
@@ -405,45 +373,68 @@ export default function Home() {
             </Txt>
           }
         />
-        <Card padded={false} style={{ paddingHorizontal: spacing.lg }}>
+        <SoftCard>
           {transactions.isLoading ? (
-            <View style={{ paddingVertical: spacing.lg, gap: spacing.md }}>
-              <Skeleton height={40} />
-              <Skeleton height={40} />
+            <View style={{ gap: spacing.md }}>
+              <Skeleton height={38} />
+              <Skeleton height={38} />
             </View>
           ) : (transactions.data?.items.length ?? 0) === 0 ? (
             <EmptyState
-              icon="₹"
-              title="No transactions yet"
-              body="Add money to your wallet to get started."
-              action={
-                <Button
-                  title="Add money"
-                  fullWidth={false}
-                  onPress={() => router.push('/wallet/add-money')}
-                />
-              }
+              icon="◷"
+              title="Nothing yet"
+              body="Once money moves, it shows up here."
             />
           ) : (
             transactions.data!.items.map((transaction, index) => (
               <View key={transaction.id}>
-                {index > 0 ? <Divider /> : null}
-                <TransactionRow transaction={transaction} />
+                {index > 0 ? (
+                  <View
+                    style={{
+                      height: 1,
+                      backgroundColor: colors.border,
+                      marginVertical: spacing.lg,
+                    }}
+                  />
+                ) : null}
+                <Row gap={spacing.md}>
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 19,
+                      backgroundColor: colors.surfaceMuted,
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Txt variant="body" tone="secondary">
+                      {ACTIVITY_GLYPH[transaction.transaction_type] ?? '•'}
+                    </Txt>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Txt variant="bodyStrong" numberOfLines={1}>
+                      {transaction.description}
+                    </Txt>
+                    {/* No amount here on purpose - see the note at the top. */}
+                    <Txt variant="caption" tone="tertiary">
+                      {ago(transaction.created_at)}
+                    </Txt>
+                  </View>
+                </Row>
               </View>
             ))
           )}
-        </Card>
+        </SoftCard>
       </View>
 
       <Txt
         variant="caption"
         tone="tertiary"
-        style={{ textAlign: 'center', marginTop: spacing.sm }}
+        style={{ textAlign: 'center', paddingHorizontal: spacing.xxl }}
       >
-        TrustPay is not a bank. In demo mode all funds are simulated.
+        Balances live in your wallet, behind your fingerprint or PIN.
       </Txt>
-
-      {lock.sheet}
     </Screen>
   );
 }

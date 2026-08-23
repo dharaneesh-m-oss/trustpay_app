@@ -42,3 +42,6 @@ yarn-error.*
 
 # Compiled output for the offline engine test
 .offline-build/
+
+# Generated launcher resources (scripts/make-android-res.py)
+android-res/

@@ -86,12 +86,12 @@ export function Card({
       style={[
         {
           backgroundColor: raised ? colors.surfaceRaised : colors.surface,
-          borderRadius: radius.lg,
-          borderWidth: 1,
-          borderColor: colors.border,
-          padding: padded ? spacing.lg : 0,
+          borderRadius: radius.xxl,
+          padding: padded ? spacing.xl : 0,
         },
-        raised ? elevation.sm : null,
+        // Depth, not lines. A card that has both a border and a shadow reads as
+        // cut out of the page rather than resting on it.
+        raised ? elevation.lg : elevation.md,
         style,
       ]}
       {...rest}
@@ -173,8 +173,8 @@ export function Button({
         onPressOut={() => (pressed.value = 0)}
         style={[
           {
-            minHeight: 52,
-            borderRadius: radius.md,
+            minHeight: 54,
+            borderRadius: radius.full,
             backgroundColor: backgrounds[variant],
             borderWidth: variant === 'ghost' ? 1 : 0,
             borderColor: colors.border,
@@ -232,8 +232,8 @@ export function Field({
         style={[
           typography.body as TextStyle,
           {
-            minHeight: 52,
-            borderRadius: radius.md,
+            minHeight: 54,
+            borderRadius: radius.lg,
             borderWidth: 1.5,
             borderColor: error
               ? colors.danger

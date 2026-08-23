@@ -37,7 +37,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import Svg, { Circle, Defs, LinearGradient as SvgGradient, Path, Polygon, Stop } from 'react-native-svg';
 
-import { glow, gradients, radius, spacing, typography, useTheme } from '@/theme';
+import { elevation, glow, gradients, radius, spacing, typography, useTheme } from '@/theme';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    1. PRIMARY / LOGIN BUTTON
@@ -452,7 +452,7 @@ export function GlassTabBar({
         bottom: bottomInset + spacing.md,
         borderRadius: radius.full,
         overflow: 'hidden',
-        ...glow('#007AFF', 0.25, 22),
+        ...elevation.lg,
       }}
     >
       <BlurView
@@ -462,9 +462,9 @@ export function GlassTabBar({
           flexDirection: 'row',
           padding: 6,
           gap: 4,
-          backgroundColor: 'rgba(0, 122, 255, 0.30)',
+          backgroundColor: 'rgba(255,255,255,0.72)',
           borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.45)',
+          borderColor: 'rgba(255,255,255,0.9)',
         }}
       >
         {items.map((item) => {
@@ -484,9 +484,9 @@ export function GlassTabBar({
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: active
-                  ? 'rgba(255,255,255,0.72)'
+                  ? '#16181C'
                   : pressed
-                    ? 'rgba(255,255,255,0.30)'
+                    ? 'rgba(0,0,0,0.05)'
                     : 'transparent',
                 transform: [{ scale: pressed ? 0.97 : 1 }],
               })}
@@ -496,7 +496,7 @@ export function GlassTabBar({
                   style={{
                     fontSize: 17,
                     lineHeight: 20,
-                    color: active ? '#0062CC' : 'rgba(255,255,255,0.95)',
+                    color: active ? '#FFFFFF' : '#8A8A8A',
                   }}
                 >
                   {item.glyph}
@@ -525,9 +525,9 @@ export function GlassTabBar({
               <Text
                 style={{
                   fontSize: 10.5,
-                  fontWeight: '700',
+                  fontWeight: '600',
                   marginTop: 3,
-                  color: active ? '#0062CC' : 'rgba(255,255,255,0.95)',
+                  color: active ? '#FFFFFF' : '#8A8A8A',
                 }}
                 numberOfLines={1}
               >

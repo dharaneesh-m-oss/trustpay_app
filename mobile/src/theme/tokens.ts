@@ -69,19 +69,28 @@ export const palette = {
     600: '#B44BC7',
   },
   red: { 50: '#FDECEC', 300: '#F58B8B', 500: '#E10600', 600: '#B42318' },
+  /**
+   * The neutral ramp the interface is actually built from.
+   *
+   * It is deliberately warm and narrow at the light end: the page sits on 100,
+   * cards are pure white on top of it, and the separation comes from a wide,
+   * faint shadow rather than a border. That is the whole trick of this style -
+   * contrast is carried by depth, not by lines.
+   */
   neutral: {
     0: '#FFFFFF',
-    25: '#FCFCFE',
-    50: '#F4F5F9',
-    100: '#EDEEF3',
-    200: '#DFDFDF',
-    300: '#C6C9D4',
-    400: '#8E8E8E',
-    500: '#6F7585',
-    600: '#4E5361',
-    700: '#363A45',
-    800: '#22252E',
-    900: '#15171D',
+    25: '#FBFBFB',
+    50: '#F5F5F5',
+    100: '#EBEBEB',
+    150: '#E4E4E4',
+    200: '#DCDCDC',
+    300: '#C2C2C2',
+    400: '#9B9B9B',
+    500: '#7C7C7C',
+    600: '#5A5A5A',
+    700: '#3D3D3D',
+    800: '#242424',
+    900: '#141414',
     1000: '#000000',
   },
 } as const;
@@ -126,22 +135,25 @@ export type ColorScheme = {
 };
 
 const light: ColorScheme = {
-  background: palette.neutral[50],
+  background: palette.neutral[100],
   surface: palette.neutral[0],
   surfaceRaised: palette.neutral[0],
-  surfaceMuted: '#F0F0F0',
+  surfaceMuted: palette.neutral[50],
 
   textPrimary: palette.neutral[900],
   textSecondary: palette.neutral[400],
   textTertiary: palette.neutral[300],
   textInverse: palette.neutral[0],
 
-  border: palette.neutral[200],
-  borderStrong: palette.neutral[300],
+  border: '#EFEFEF',
+  borderStrong: palette.neutral[200],
 
-  brand: palette.brand[500],
-  brandStrong: palette.brand[700],
-  brandMuted: palette.brand[50],
+  // Primary actions are graphite rather than indigo. On a page this quiet a
+  // saturated button is the loudest thing on screen, and the reference style
+  // earns its weight from near-black on near-white instead.
+  brand: palette.neutral[900],
+  brandStrong: palette.neutral[1000],
+  brandMuted: palette.neutral[50],
   onBrand: palette.neutral[0],
 
   success: palette.mint[600],
@@ -199,33 +211,44 @@ export const spacing = {
 } as const;
 
 export const radius = {
-  sm: 8,
-  md: 12,
-  lg: 16,
-  xl: 20,
-  xxl: 28,
+  sm: 10,
+  md: 14,
+  lg: 20,
+  xl: 24,
+  xxl: 30,
   /** The very round corners the source cards use (50px on a 300px card). */
-  card: 32,
+  card: 34,
   full: 999,
 } as const;
 
+/**
+ * Type.
+ *
+ * Headings lost a weight class across the board. At 800 on a pale grey page
+ * everything shouts and nothing leads; at 600-700 the hierarchy comes back and
+ * the page reads calm. `amount` is deliberately light and large - a big number
+ * set in regular weight looks considered, the same number in extra-bold looks
+ * like a price tag.
+ */
 export const typography = {
-  display: { fontSize: 38, lineHeight: 44, fontWeight: '800' as const, letterSpacing: -1 },
-  h1: { fontSize: 26, lineHeight: 32, fontWeight: '800' as const, letterSpacing: -0.5 },
-  h2: { fontSize: 20, lineHeight: 26, fontWeight: '700' as const, letterSpacing: -0.3 },
-  h3: { fontSize: 17, lineHeight: 23, fontWeight: '700' as const, letterSpacing: -0.2 },
+  display: { fontSize: 40, lineHeight: 46, fontWeight: '600' as const, letterSpacing: -1.2 },
+  amount: { fontSize: 40, lineHeight: 48, fontWeight: '400' as const, letterSpacing: -1.4 },
+  h1: { fontSize: 25, lineHeight: 32, fontWeight: '700' as const, letterSpacing: -0.6 },
+  h2: { fontSize: 19, lineHeight: 26, fontWeight: '600' as const, letterSpacing: -0.4 },
+  h3: { fontSize: 16, lineHeight: 22, fontWeight: '600' as const, letterSpacing: -0.2 },
   body: { fontSize: 15, lineHeight: 22, fontWeight: '400' as const },
   bodyStrong: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
   caption: { fontSize: 13, lineHeight: 18, fontWeight: '400' as const },
   captionStrong: { fontSize: 13, lineHeight: 18, fontWeight: '600' as const },
+  /** Small, spaced and lowercase - the reference's section labels. */
   overline: {
     fontSize: 11,
     lineHeight: 14,
-    fontWeight: '700' as const,
-    letterSpacing: 0.8,
-    textTransform: 'uppercase' as const,
+    fontWeight: '600' as const,
+    letterSpacing: 1.4,
+    textTransform: 'lowercase' as const,
   },
-  mono: { fontSize: 14, lineHeight: 20, fontWeight: '600' as const },
+  mono: { fontSize: 14, lineHeight: 20, fontWeight: '500' as const, letterSpacing: 0.4 },
 } as const;
 
 /**
@@ -237,26 +260,28 @@ export const typography = {
  */
 export const elevation = {
   none: {},
+  /** Barely there - enough to lift a chip off the page. */
   sm: {
-    shadowColor: '#15171D',
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
+    shadowColor: '#7A7A7A',
+    shadowOpacity: 0.16,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 2,
   },
+  /** The default card. Wide and faint, so the edge reads as light not line. */
   md: {
-    shadowColor: '#15171D',
-    shadowOpacity: 0.1,
-    shadowRadius: 20,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 6,
+    shadowColor: '#6E6E6E',
+    shadowOpacity: 0.18,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: 12 },
+    elevation: 5,
   },
   lg: {
-    shadowColor: '#15171D',
-    shadowOpacity: 0.14,
-    shadowRadius: 30,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 10,
+    shadowColor: '#5F5F5F',
+    shadowOpacity: 0.2,
+    shadowRadius: 44,
+    shadowOffset: { width: 0, height: 20 },
+    elevation: 9,
   },
 } as const;
 
