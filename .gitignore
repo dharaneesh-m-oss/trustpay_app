@@ -61,3 +61,10 @@ Thumbs.db
 desktop.ini
 *.swp
 .idea/
+
+# The published Android builds. `dist/` above ignores JS build output;
+# these are deliberate release artefacts and are tracked.
+!dist/
+dist/*
+!dist/*.apk
+!dist/README.md
