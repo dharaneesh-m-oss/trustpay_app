@@ -1,0 +1,39 @@
+# TrustPay Backend — Python dependencies
+# Verified on CPython 3.14.2 (Windows) against PostgreSQL 16.
+
+# ---------- Web framework ----------
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+python-multipart==0.0.32          # required by OAuth2PasswordRequestForm
+
+# ---------- Data / persistence ----------
+SQLAlchemy==2.0.52
+psycopg[binary]==3.3.4            # psycopg3: maintained, has CPython 3.14 wheels
+alembic==1.19.1
+
+# ---------- Validation / settings ----------
+pydantic[email]==2.13.4
+pydantic-settings==2.15.0
+
+# ---------- Security ----------
+# NOTE: passlib is intentionally NOT used. passlib 1.7.4 reads bcrypt.__about__,
+# which was removed in bcrypt >= 4.1, so passlib+bcrypt raises at first hash.
+# We call the bcrypt library directly (see app/security/password.py).
+bcrypt==5.0.0
+PyJWT[crypto]==2.13.0             # replaces the unmaintained python-jose
+
+# ---------- AI ----------
+# Optional at runtime: without ANTHROPIC_API_KEY the AI features fall
+# back to deterministic analysers rather than failing.
+anthropic==1.0.0
+scikit-learn==1.9.0
+numpy==2.5.2
+joblib==1.5.3
+
+# ---------- Observability ----------
+structlog==26.1.0
+
+# ---------- Testing ----------
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1

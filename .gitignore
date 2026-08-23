@@ -1,0 +1,63 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.egg-info/
+dist/
+build/
+
+# ---------- Secrets & environment ----------
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+!**/*.public.key
+secrets/
+
+# ---------- Database ----------
+*.sqlite3
+*.db
+pgdata/
+
+# ---------- Node / React Native / Expo ----------
+node_modules/
+.expo/
+.expo-shared/
+dist/
+web-build/
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+*.orig.*
+.metro-health-check*
+android/
+ios/
+
+# ---------- Logs ----------
+*.log
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+logs/
+
+# ---------- OS / Editor ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+.idea/
