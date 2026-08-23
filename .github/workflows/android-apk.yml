@@ -1,0 +1,111 @@
+# Build an installable Android APK and attach it to a GitHub Release.
+#
+# Run it from the Actions tab ("Run workflow"). It needs one repository secret:
+#
+#   EXPO_TOKEN   an Expo access token - expo.dev, Account Settings,
+#                Access Tokens, Create. This is what lets the runner build
+#                without an interactive login.
+#
+# Why the API URL is an input: a standalone APK has no Metro server to derive
+# the backend address from, the way the app does in development. The address has
+# to be compiled in, so it must be one the phone can actually reach - a deployed
+# backend, or your machine's LAN IP while it is running and on the same Wi-Fi.
+
+name: Android APK
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "Backend API base URL the APK will call (e.g. http://192.168.1.20:8000/api/v1)"
+        required: true
+        type: string
+      release_tag:
+        description: "Release tag for the APK"
+        required: false
+        default: "apk-latest"
+        type: string
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      # Needed to create the release and upload the APK to it.
+      contents: write
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mobile
+        run: npm ci
+
+      - name: Type-check
+        # A build that compiles but fails type-check is not worth shipping, and
+        # catching it here is far cheaper than waiting on an EAS queue.
+        working-directory: mobile
+        run: npx tsc --noEmit
+
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
+
+      - name: Build the APK on EAS
+        id: build
+        working-directory: mobile
+        env:
+          EXPO_PUBLIC_API_URL: ${{ inputs.api_url }}
+        run: |
+          set -euo pipefail
+          # --wait blocks until the cloud build finishes; --json gives us the
+          # artifact URL without scraping human-readable output.
+          eas build \
+            --platform android \
+            --profile preview \
+            --non-interactive \
+            --wait \
+            --json > build.json
+
+          URL=$(node -e "const b=require('./build.json'); const r=Array.isArray(b)?b[0]:b; process.stdout.write(r.artifacts?.buildUrl || r.artifacts?.applicationArchiveUrl || '')")
+          if [ -z "$URL" ]; then
+            echo "EAS returned no artifact URL:" >&2
+            cat build.json >&2
+            exit 1
+          fi
+          echo "artifact_url=$URL" >> "$GITHUB_OUTPUT"
+
+      - name: Download the APK
+        working-directory: mobile
+        run: |
+          set -euo pipefail
+          curl -fSL "${{ steps.build.outputs.artifact_url }}" -o trustpay.apk
+          ls -lh trustpay.apk
+
+      - name: Publish it as a release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release_tag }}
+          name: TrustPay APK
+          body: |
+            Installable Android build of TrustPay.
+
+            Backend this build talks to: `${{ inputs.api_url }}`
+
+            The address is compiled in, so the app only works while that backend
+            is reachable from the phone. If it is a LAN address, the machine
+            running the API must be on and on the same Wi-Fi.
+
+            To install: download the APK on the phone and allow installation
+            from unknown sources when prompted.
+          files: mobile/trustpay.apk
+          fail_on_unmatched_files: true
