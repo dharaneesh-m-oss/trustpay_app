@@ -30,7 +30,8 @@
       "expo-router",
       "expo-secure-store",
       "expo-web-browser",
-      "./plugins/with-upi-queries"
+      "./plugins/with-upi-queries",
+      "./plugins/with-google-scheme"
     ],
     "scheme": "trustpay",
     "newArchEnabled": true,
