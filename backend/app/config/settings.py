@@ -8,6 +8,7 @@ through the application.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -79,6 +80,53 @@ class Settings(BaseSettings):
     @property
     def ai_configured(self) -> bool:
         return bool(self.AI_ENABLED and self.ANTHROPIC_API_KEY)
+
+    # ---------- Google Sign-In ----------
+    GOOGLE_CLIENT_ID: str | None = None
+    """The OAuth *web* client id. Tokens from the app are verified against it."""
+
+    GOOGLE_ANDROID_CLIENT_ID: str | None = None
+    """The Android client id, if the app requests tokens under its own."""
+
+    @property
+    def google_configured(self) -> bool:
+        return bool(self.GOOGLE_CLIENT_ID or self.GOOGLE_ANDROID_CLIENT_ID)
+
+    @property
+    def google_audiences(self) -> list[str]:
+        """Every client id a token may legitimately be issued for."""
+        return [
+            value
+            for value in (self.GOOGLE_CLIENT_ID, self.GOOGLE_ANDROID_CLIENT_ID)
+            if value
+        ]
+
+    # ---------- Payments ----------
+    # Real money needs a payment aggregator account, which needs business KYC.
+    # Absent these, the payment endpoints refuse rather than simulate: a wallet
+    # that credits itself without a provider confirmation is not a wallet.
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
+    RAZORPAY_WEBHOOK_SECRET: str | None = None
+
+    RAZORPAY_PAYOUT_ACCOUNT: str | None = None
+    """The RazorpayX virtual account payouts are funded from."""
+
+    MERCHANT_VPA: str | None = None
+    """The UPI address collections are addressed to."""
+
+    MERCHANT_NAME: str = "TrustPay"
+
+    MIN_PAYOUT_AMOUNT: Decimal = Decimal("100.00")
+    PAYOUT_DAILY_LIMIT: Decimal = Decimal("50000.00")
+
+    @property
+    def payments_configured(self) -> bool:
+        return bool(self.RAZORPAY_KEY_ID and self.RAZORPAY_KEY_SECRET)
+
+    @property
+    def payouts_configured(self) -> bool:
+        return bool(self.payments_configured and self.RAZORPAY_PAYOUT_ACCOUNT)
 
     # ---------- CORS ----------
     CORS_ORIGINS: str = ""

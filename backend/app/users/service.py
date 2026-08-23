@@ -21,6 +21,7 @@ from app.users import repository as users_repo
 from app.users.exceptions import (
     EmailAlreadyRegisteredError,
     IncorrectPasswordError,
+    PasswordlessAccountError,
     PhoneAlreadyRegisteredError,
     UserNotFoundError,
 )
@@ -203,6 +204,9 @@ def change_password(
     Returns the number of sessions revoked.
     """
     context = context or RequestContext()
+
+    if user.password_hash is None:
+        raise PasswordlessAccountError()
 
     if not verify_password(payload.current_password, user.password_hash):
         raise IncorrectPasswordError()

@@ -28,3 +28,13 @@ class IncorrectPasswordError(AuthenticationError):
     code = "INCORRECT_PASSWORD"
     status_code = 400
     message = "The current password you entered is incorrect."
+
+
+class PasswordlessAccountError(AuthenticationError):
+    """The account has no password because it signs in with Google."""
+
+    code = "PASSWORDLESS_ACCOUNT"
+    status_code = 400
+    message = (
+        "This account signs in with Google, so it has no password to change."
+    )

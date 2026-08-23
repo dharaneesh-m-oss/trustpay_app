@@ -49,11 +49,13 @@ def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
 
-def verify_password(plain_password: str, password_hash: str) -> bool:
+def verify_password(plain_password: str, password_hash: str | None) -> bool:
     """Constant-time verification that never raises on malformed input.
 
     A malformed stored hash must read as "wrong password", not as a 500 that
-    tells an attacker something about the account.
+    tells an attacker something about the account. A *missing* hash - an account
+    that only signs in with Google - reads the same way, so the password login
+    path cannot be used to discover which accounts have no password.
     """
     if not plain_password or not password_hash:
         return False

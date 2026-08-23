@@ -27,6 +27,7 @@ from app.config.settings import settings
 from app.core.exceptions import TrustPayError
 from app.core.logging import configure_logging, get_logger
 from app.admin.router import router as admin_router
+from app.payments.router import router as payments_router
 from app.ai.router import router as ai_router
 from app.cancellation.router import router as cancellation_router
 from app.disputes.router import router as disputes_router
@@ -201,6 +202,7 @@ app.include_router(disputes_router, prefix=settings.API_PREFIX)
 app.include_router(notifications_router, prefix=settings.API_PREFIX)
 app.include_router(ai_router, prefix=settings.API_PREFIX)
 app.include_router(admin_router, prefix=settings.API_PREFIX)
+app.include_router(payments_router, prefix=settings.API_PREFIX)
 
 
 @app.get("/", tags=["System"], summary="Service banner")

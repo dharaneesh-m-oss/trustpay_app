@@ -23,10 +23,12 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LogoMark } from '@/components/Logo';
-import { Row, Txt } from '@/components/ui';
+import { Button, Row, Txt } from '@/components/ui';
 import { GradientButton } from '@/components/uiverse';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/store/auth';
+import { available as googleAvailable, errorFrom, idTokenFrom, useGoogleAuth } from '@/lib/google';
+import { getMode } from '@/lib/api';
 import { DEMO_EMAIL, DEMO_PASSWORD } from '@/local/engine';
 import { gradients, glow, useTheme } from '@/theme';
 
@@ -35,6 +37,11 @@ export default function SignIn() {
   const { colors, spacing, radius, typography } = useTheme();
   const insets = useSafeAreaInsets();
   const signIn = useAuth((state) => state.signIn);
+  const signInWithGoogle = useAuth((state) => state.signInWithGoogle);
+  const google = useGoogleAuth();
+  // Google sign-in needs the real server to verify the token, so it is only
+  // offered in live mode - in demo there is nothing to verify against.
+  const canUseGoogle = googleAvailable() && getMode() === 'live';
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -60,6 +67,27 @@ export default function SignIn() {
       setBusy(false);
     }
   };
+
+  // The Google response arrives asynchronously, after the browser returns.
+  React.useEffect(() => {
+    const token = idTokenFrom(google.response);
+    if (token) {
+      setBusy(true);
+      signInWithGoogle(token)
+        .then(() => router.replace('/(tabs)/home'))
+        .catch((caught) =>
+          setError(
+            caught instanceof ApiError
+              ? caught.message
+              : 'Google sign-in could not be completed.',
+          ),
+        )
+        .finally(() => setBusy(false));
+      return;
+    }
+    const failure = errorFrom(google.response);
+    if (failure) setError(failure);
+  }, [google.response, signInWithGoogle, router]);
 
   const submit = () => {
     if (!email || !password) return;
@@ -217,6 +245,32 @@ export default function SignIn() {
             loading={busy}
             disabled={!email || !password}
           />
+
+          {canUseGoogle ? (
+            <>
+              <Row
+                gap={spacing.md}
+                style={{ alignItems: 'center', marginTop: spacing.xl }}
+              >
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                <Txt variant="caption" tone="tertiary">
+                  or
+                </Txt>
+                <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+              </Row>
+
+              <Button
+                title="Continue with Google"
+                variant="secondary"
+                disabled={!google.request || busy}
+                onPress={() => {
+                  setError(null);
+                  google.promptAsync();
+                }}
+                style={{ marginTop: spacing.lg }}
+              />
+            </>
+          ) : null}
 
           <Txt
             variant="captionStrong"

@@ -28,7 +28,9 @@
     },
     "plugins": [
       "expo-router",
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-web-browser",
+      "./plugins/with-upi-queries"
     ],
     "scheme": "trustpay",
     "newArchEnabled": true,

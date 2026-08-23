@@ -49,3 +49,9 @@ class LoginResponse(TokenResponse):
 class SessionRevokedResponse(BaseModel):
     message: str
     sessions_revoked: int
+
+
+class GoogleSignInRequest(BaseModel):
+    """The ID token issued to the app by Google Sign-In."""
+
+    id_token: str = Field(min_length=32, max_length=4096)

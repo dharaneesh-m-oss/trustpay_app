@@ -30,6 +30,7 @@ type AuthState = {
 
   restore: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: (idToken: string) => Promise<void>;
   register: (input: {
     full_name: string;
     email: string;
@@ -64,6 +65,15 @@ export const useAuth = create<AuthState>((set, get) => ({
 
   async signIn(email, password) {
     const { data } = await api.post('/auth/login', { email, password });
+    await tokenStorage.setTokens(data.access_token, data.refresh_token);
+    set({ user: data.user, isAuthenticated: true });
+  },
+
+  async signInWithGoogle(idToken) {
+    // The token goes to the server unexamined: it is verified there against
+    // Google's keys, and anything checked here could be skipped by a modified
+    // build.
+    const { data } = await api.post('/auth/google', { id_token: idToken });
     await tokenStorage.setTokens(data.access_token, data.refresh_token);
     set({ user: data.user, isAuthenticated: true });
   },

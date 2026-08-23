@@ -1,10 +1,11 @@
 /**
  * API client.
  *
- * TrustPay runs entirely on the device, so this client's requests are served by
- * the local engine in `src/local` rather than sent anywhere. That is done by
- * swapping axios's adapter, which keeps every caller, query key and error path
- * below exactly as it was when a server existed.
+ * The client serves requests one of two ways, chosen by the app's mode (see
+ * `lib/mode`): over the network to the deployed server, or from the on-device
+ * engine in `src/local`. Swapping axios's adapter is what makes that a one-line
+ * difference - every caller, query key and error path below is identical either
+ * way, and no screen knows which it is talking to.
  *
  * Two things still matter here beyond plumbing:
  *
@@ -28,6 +29,7 @@ import axios, {
 
 import { localAdapter } from '@/local/adapter';
 
+import { LIVE_API_URL, loadMode, saveMode, type AppMode } from './mode';
 import { tokenStorage } from './storage';
 
 export type ApiErrorBody = {
@@ -68,13 +70,49 @@ export function setSessionExpiredHandler(handler: () => void) {
 }
 
 export const api: AxiosInstance = axios.create({
-  // Nothing is dialled, so the base URL is only a prefix the adapter strips and
-  // the timeout never fires. Both are kept so request shapes stay familiar.
-  baseURL: '/',
-  timeout: 15000,
+  baseURL: LIVE_API_URL || '/',
+  timeout: 20000,
   headers: { 'Content-Type': 'application/json' },
-  adapter: localAdapter,
 });
+
+let currentMode: AppMode = 'demo';
+
+export function getMode(): AppMode {
+  return currentMode;
+}
+
+/**
+ * Point the client at the server or at the on-device engine.
+ *
+ * In demo mode the base URL is only a prefix the local adapter strips, and the
+ * timeout never fires because nothing is dialled.
+ */
+export function applyMode(mode: AppMode): void {
+  currentMode = mode;
+  if (mode === 'live') {
+    api.defaults.baseURL = LIVE_API_URL;
+    api.defaults.adapter = undefined;
+  } else {
+    api.defaults.baseURL = '/';
+    api.defaults.adapter = localAdapter;
+  }
+}
+
+/** Restore the saved mode. Called once during startup, before any query runs. */
+export async function initMode(): Promise<AppMode> {
+  const mode = await loadMode();
+  applyMode(mode);
+  return mode;
+}
+
+/** Change mode and remember it. The caller is responsible for signing out. */
+export async function switchMode(mode: AppMode): Promise<void> {
+  applyMode(mode);
+  await saveMode(mode);
+}
+
+// Until startup runs, assume demo: it cannot accidentally send anything.
+applyMode('demo');
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   const token = await tokenStorage.getAccessToken();
@@ -92,8 +130,8 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    // This goes through `api` so it reaches the local adapter. It cannot
-    // recurse: the interceptor below skips retrying the refresh URL itself.
+    // This goes through `api` so it reaches whichever adapter is active. It
+    // cannot recurse: the interceptor below skips retrying the refresh URL.
     const response = await api.post(
       '/auth/refresh',
       { refresh_token: refreshToken },

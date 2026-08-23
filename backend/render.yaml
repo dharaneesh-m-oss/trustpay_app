@@ -1,0 +1,48 @@
+# Render deployment for the TrustPay API.
+#
+# `alembic upgrade head` runs on every start rather than as a one-off: a
+# container that boots against a schema it does not expect is a worse failure
+# than a slightly slower start, and Alembic is a no-op when there is nothing to
+# apply.
+services:
+  - type: web
+    name: trustpay-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13"
+      - key: ENVIRONMENT
+        value: production
+      - key: DEMO_MODE
+        value: "false"
+      # Generated once by Render and then held. Rotating it invalidates every
+      # session and makes stored bank account numbers unreadable, because the
+      # encryption key is derived from it.
+      - key: SECRET_KEY
+        generateValue: true
+      # Set these in the dashboard - they are secrets, and the payment ones
+      # cannot be obtained without a KYC'd merchant account. See
+      # docs/GOING-LIVE.md.
+      - key: DATABASE_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_ANDROID_CLIENT_ID
+        sync: false
+      - key: RAZORPAY_KEY_ID
+        sync: false
+      - key: RAZORPAY_KEY_SECRET
+        sync: false
+      - key: RAZORPAY_WEBHOOK_SECRET
+        sync: false
+      - key: RAZORPAY_PAYOUT_ACCOUNT
+        sync: false
+      - key: MERCHANT_VPA
+        sync: false

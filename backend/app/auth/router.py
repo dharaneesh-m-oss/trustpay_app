@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.auth import service as auth_service
 from app.auth.dependencies import get_current_user, get_request_context
 from app.auth.schema import (
+    GoogleSignInRequest,
     LoginRequest,
     LoginResponse,
     LogoutRequest,
@@ -22,6 +23,30 @@ from app.users.model import User
 from app.users.schema import UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post(
+    "/google",
+    response_model=LoginResponse,
+    summary="Sign in with Google",
+)
+def sign_in_with_google(
+    payload: GoogleSignInRequest,
+    db: Session = Depends(get_db),
+    context: RequestContext = Depends(get_request_context),
+) -> LoginResponse:
+    """Exchange a verified Google ID token for a TrustPay session.
+
+    The token is verified server-side against Google's keys. The app cannot be
+    trusted to have done it: anything the app checks, a modified app can skip.
+    """
+    session = auth_service.sign_in_with_google(db, payload.id_token, context=context)
+    return LoginResponse(
+        access_token=session.access_token,
+        refresh_token=session.refresh_token,
+        expires_in=session.expires_in,
+        user=UserResponse.model_validate(session.user),
+    )
 
 
 @router.post(

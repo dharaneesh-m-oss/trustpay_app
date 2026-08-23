@@ -5,6 +5,12 @@
  * amount feels like in every payments app people already use — and because it
  * makes a decimal-string amount easy to build without a keyboard that can
  * produce nonsense.
+ *
+ * Where the amount goes depends on what the deployment can actually do. With a
+ * payment provider configured this hands off to the UPI flow and real money
+ * moves. Without one it posts a simulated top-up, and the screen says so - the
+ * two must never look identical, because the difference is whether the balance
+ * on screen means anything.
  */
 
 import { useRouter } from 'expo-router';
@@ -16,6 +22,7 @@ import { Amount } from '@/components/product';
 import { Card, Row, Txt } from '@/components/ui';
 import { SlideActionButton } from '@/components/uiverse';
 import { ApiError } from '@/lib/api';
+import { usePaymentsStatus } from '@/lib/payments';
 import { useTopUp, useWallet } from '@/lib/queries';
 import { useTheme } from '@/theme';
 
@@ -28,6 +35,8 @@ export default function AddMoney() {
 
   const wallet = useWallet();
   const topUp = useTopUp();
+  const payments = usePaymentsStatus();
+  const live = payments.data?.collections_enabled ?? false;
   const [digits, setDigits] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -46,6 +55,14 @@ export default function AddMoney() {
 
   const submit = async () => {
     setError(null);
+
+    // Real money goes through UPI; the simulated path exists only where there
+    // is no provider to route it to.
+    if (live) {
+      router.replace({ pathname: '/wallet/upi-top-up', params: { amount } });
+      return;
+    }
+
     try {
       await topUp.mutateAsync(amount);
       router.back();

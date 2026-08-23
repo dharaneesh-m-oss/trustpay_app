@@ -28,6 +28,13 @@ def get_by_phone(db: Session, phone: str) -> User | None:
     return db.scalar(select(User).where(User.phone == phone))
 
 
+def get_by_google_subject(db: Session, subject: str) -> User | None:
+    """Google's `sub` is the stable identifier; an email can be reassigned."""
+    if not subject:
+        return None
+    return db.scalar(select(User).where(User.google_subject == subject))
+
+
 def get_for_update(db: Session, user_id: uuid.UUID) -> User | None:
     """Read the row with a write lock held until the transaction ends.
 

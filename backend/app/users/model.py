@@ -38,7 +38,21 @@ class User(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     # (spec section 15) — the OTP has to reach a verified contact.
     phone: Mapped[str | None] = mapped_column(String(20), nullable=True, unique=True)
 
-    password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    """Null for accounts that only ever sign in with Google.
+
+    Storing an unusable placeholder hash instead would be worse: it makes a
+    passwordless account indistinguishable from one whose password nobody
+    remembers, and invites a password-reset flow that sets a password on an
+    account the owner believes has none."""
+
+    google_subject: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, unique=True, index=True
+    )
+    """Google's stable user id. Matched on before email, because an email can be
+    reassigned by a workspace admin while `sub` cannot."""
+
+    avatar_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
 
     role: Mapped[UserRole] = mapped_column(
         _pg_enum(UserRole, "user_role"),

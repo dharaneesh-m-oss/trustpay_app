@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ApiError } from '@/lib/api';
+import { ApiError, initMode } from '@/lib/api';
 import { ensureSeeded } from '@/local/engine';
 import { useAuth } from '@/store/auth';
 import { ThemeProvider, useTheme } from '@/theme';
@@ -48,9 +48,13 @@ function RootNavigator() {
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    // The local store has to exist before any query runs, including the
-    // session check inside restore().
-    ensureSeeded().finally(() => restore());
+    // Mode decides whether requests go to the server or the on-device engine,
+    // so it has to be settled before any query runs - including the session
+    // check inside restore(). The local store is seeded either way, so demo
+    // mode is ready the moment someone switches to it.
+    initMode()
+      .then(() => ensureSeeded())
+      .finally(() => restore());
   }, [restore]);
 
   useEffect(() => {
@@ -95,6 +99,8 @@ function RootNavigator() {
           options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
         />
         <Stack.Screen name="wallet/cards" />
+        <Stack.Screen name="wallet/bank-accounts" />
+        <Stack.Screen name="wallet/upi-top-up" />
         <Stack.Screen name="project/create" />
         <Stack.Screen name="cancellation/[id]" />
         <Stack.Screen name="dispute/[id]" />

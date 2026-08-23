@@ -26,7 +26,7 @@ from app.auth.exceptions import (
 )
 from app.auth.model import RefreshToken
 from app.config.settings import settings
-from app.core.constants import AuditAction, UserStatus
+from app.core.constants import AuditAction, UserRole, UserStatus
 from app.core.context import RequestContext
 from app.core.identifiers import new_uuid
 from app.core.logging import get_logger
@@ -292,3 +292,95 @@ def logout(
     )
     db.commit()
     return revoked
+
+
+def sign_in_with_google(
+    db: Session,
+    id_token: str,
+    *,
+    context: RequestContext | None = None,
+) -> IssuedSession:
+    """Sign in, or create an account, from a verified Google identity.
+
+    The matching order is deliberate and is the security-relevant part:
+
+    1. **By Google subject.** The stable id. A returning user is found here.
+    2. **By email, and only then linked.** Someone who registered with a
+       password and later taps "Continue with Google" should land in their own
+       account, not a second one. Linking is safe *only* because
+       `verify_id_token` has already refused any token whose email Google has
+       not verified - without that check this branch would be an account
+       takeover: claim the email, get the account.
+    3. **Otherwise create one**, with no password at all rather than a random
+       one nobody can use.
+
+    An account is never created here for a suspended or closed user, and an
+    existing locked account is not unlocked by arriving through Google.
+    """
+    from app.auth.google import verify_id_token
+
+    context = context or RequestContext()
+    identity = verify_id_token(id_token)
+    now = _now()
+
+    user = users_repo.get_by_google_subject(db, identity.subject)
+    created = False
+
+    if user is None:
+        existing = users_repo.get_by_email(db, identity.email)
+        if existing is not None:
+            _assert_can_authenticate(existing, now)
+            existing.google_subject = identity.subject
+            if not existing.email_verified_at:
+                existing.email_verified_at = now
+            if identity.picture and not existing.avatar_url:
+                existing.avatar_url = identity.picture
+            user = existing
+        else:
+            user = User(
+                full_name=identity.full_name,
+                email=identity.email,
+                password_hash=None,
+                google_subject=identity.subject,
+                avatar_url=identity.picture,
+                role=UserRole.USER,
+                status=UserStatus.ACTIVE,
+                email_verified_at=now,
+            )
+            db.add(user)
+            db.flush()
+            created = True
+
+            # Same post-registration work the password path does, so an account
+            # created through Google is not a second-class one.
+            from app.projects.invitations import claim_pending_invitations
+            from app.wallet.service import create_wallet_for_user
+
+            create_wallet_for_user(db, user)
+            claim_pending_invitations(db, user)
+    else:
+        _assert_can_authenticate(user, now)
+
+    user.last_login_at = now
+    user.failed_login_attempts = 0
+
+    session = _issue_session(
+        db, user, family_id=new_uuid(), context=context
+    )
+
+    audit.record(
+        db,
+        action=AuditAction.USER_REGISTERED if created else AuditAction.USER_LOGGED_IN,
+        actor_user_id=user.id,
+        entity_type="user",
+        entity_id=user.id,
+        context={"method": "google", "created": created},
+        ip_address=context.ip_address,
+        user_agent=context.user_agent,
+    )
+    db.commit()
+
+    logger.info(
+        "google_sign_in user_id=%s created=%s", user.id, created
+    )
+    return session
