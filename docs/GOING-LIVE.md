@@ -121,9 +121,18 @@ card:
    rewrites `postgres://` and `postgresql://` to the psycopg driver and adds
    `sslmode=require` itself, so there is nothing to hand-edit.
 
-   On Supabase the string is under *Project Settings → Database → Connection
-   string → URI*, and you must substitute your database password where it says
-   `[YOUR-PASSWORD]`.
+   **On Supabase, take the Session pooler string, not the direct one.**
+   *Project Settings → Database → Connection string*, then pick **Session
+   pooler** and substitute your password for `[YOUR-PASSWORD]`.
+
+   The direct connection (`db.<ref>.supabase.co`) is IPv6-only on new projects,
+   and Render's free tier makes IPv4 outbound connections — so it fails with a
+   network error that looks like a wrong password. The *transaction* pooler
+   (port 6543) connects but breaks later: it hands each statement to whichever
+   backend is free, so psycopg's automatically prepared statements vanish
+   between calls and queries start failing minutes in, under load. The app
+   disables statement preparation when it detects that port, so 6543 works too —
+   but the session pooler is the one to use.
 
 2. **API** — <https://render.com> → **New → Blueprint**, and pick this repo.
    `render.yaml` at the root describes the service, so the build and start
