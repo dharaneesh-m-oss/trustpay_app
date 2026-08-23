@@ -1,7 +1,12 @@
 /**
  * API client.
  *
- * Two things matter here beyond plumbing:
+ * TrustPay runs entirely on the device, so this client's requests are served by
+ * the local engine in `src/local` rather than sent anywhere. That is done by
+ * swapping axios's adapter, which keeps every caller, query key and error path
+ * below exactly as it was when a server existed.
+ *
+ * Two things still matter here beyond plumbing:
  *
  * 1. **Token refresh is serialised.** When an access token expires, several
  *    queries usually fail at once. Without a shared in-flight promise each one
@@ -21,11 +26,8 @@ import axios, {
   InternalAxiosRequestConfig,
 } from 'axios';
 
-import {
-  defaultServerUrl,
-  loadSavedServerUrl,
-  saveServerUrl,
-} from './server-config';
+import { localAdapter } from '@/local/adapter';
+
 import { tokenStorage } from './storage';
 
 export type ApiErrorBody = {
@@ -59,41 +61,6 @@ export class ApiError extends Error {
   }
 }
 
-/**
- * Where the API lives.
- *
- * This used to be resolved once, at module load, from a build-time constant.
- * It is now owned by `server-config`, which can change it while the app is
- * running — see the reasoning there. `api.defaults.baseURL` is the single
- * source of truth, so everything below reads it rather than closing over a
- * value captured at import time.
- */
-/** The current base URL. Read it through `getBaseUrl()`, never cache it. */
-export function getBaseUrl(): string {
-  return api.defaults.baseURL ?? defaultServerUrl();
-}
-
-/** Point the client at a different backend, for the rest of this launch. */
-export function setBaseUrl(url: string): void {
-  api.defaults.baseURL = url;
-}
-
-/** Point the client at a different backend and remember it across launches. */
-export async function persistBaseUrl(url: string): Promise<void> {
-  setBaseUrl(url);
-  await saveServerUrl(url);
-}
-
-/**
- * Restore the saved address, if there is one. Called once during startup,
- * before any query runs.
- */
-export async function initBaseUrl(): Promise<string> {
-  const saved = await loadSavedServerUrl();
-  if (saved) setBaseUrl(saved);
-  return getBaseUrl();
-}
-
 let onSessionExpired: (() => void) | null = null;
 
 export function setSessionExpiredHandler(handler: () => void) {
@@ -101,9 +68,12 @@ export function setSessionExpiredHandler(handler: () => void) {
 }
 
 export const api: AxiosInstance = axios.create({
-  baseURL: defaultServerUrl(),
+  // Nothing is dialled, so the base URL is only a prefix the adapter strips and
+  // the timeout never fires. Both are kept so request shapes stay familiar.
+  baseURL: '/',
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
+  adapter: localAdapter,
 });
 
 api.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
@@ -122,12 +92,11 @@ async function refreshAccessToken(): Promise<string | null> {
   if (!refreshToken) return null;
 
   try {
-    // A bare axios call, not `api` — going through the instance would recurse
-    // straight back into this interceptor.
-    const response = await axios.post(
-      `${getBaseUrl()}/auth/refresh`,
+    // This goes through `api` so it reaches the local adapter. It cannot
+    // recurse: the interceptor below skips retrying the refresh URL itself.
+    const response = await api.post(
+      '/auth/refresh',
       { refresh_token: refreshToken },
-      { timeout: 15000 },
     );
     await tokenStorage.setTokens(
       response.data.access_token,

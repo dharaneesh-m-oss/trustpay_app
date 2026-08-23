@@ -27,6 +27,7 @@ import { Row, Txt } from '@/components/ui';
 import { GradientButton } from '@/components/uiverse';
 import { ApiError } from '@/lib/api';
 import { useAuth } from '@/store/auth';
+import { DEMO_EMAIL, DEMO_PASSWORD } from '@/local/engine';
 import { gradients, glow, useTheme } from '@/theme';
 
 export default function SignIn() {
@@ -39,26 +40,17 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [focused, setFocused] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  // A network failure is fixable on the server settings screen; a wrong
-  // password is not. Offering that link for both would be noise.
-  const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
 
-  const submit = async () => {
-    if (!email || !password) return;
+  const enter = async (withEmail: string, withPassword: string) => {
     setError(null);
-    setUnreachable(false);
     setBusy(true);
     try {
-      await signIn(email.trim(), password);
+      await signIn(withEmail.trim(), withPassword);
       router.replace('/(tabs)/home');
     } catch (caught) {
-      // The backend returns one message for a wrong password and an unknown
-      // address alike, on purpose. Showing it verbatim keeps that property.
-      const offline =
-        caught instanceof ApiError &&
-        (caught.code === 'NETWORK_ERROR' || caught.code === 'TIMEOUT');
-      setUnreachable(offline);
+      // One message covers a wrong password and an unknown address alike, on
+      // purpose. Showing it verbatim keeps that property.
       setError(
         caught instanceof ApiError
           ? caught.message
@@ -67,6 +59,11 @@ export default function SignIn() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const submit = () => {
+    if (!email || !password) return;
+    return enter(email, password);
   };
 
   const field = (
@@ -209,17 +206,6 @@ export default function SignIn() {
               <Txt variant="caption" tone="danger">
                 {error}
               </Txt>
-              {unreachable ? (
-                <Txt
-                  variant="captionStrong"
-                  tone="brand"
-                  accessibilityRole="button"
-                  style={{ marginTop: spacing.sm }}
-                  onPress={() => router.push('/server')}
-                >
-                  Check server address →
-                </Txt>
-              ) : null}
             </View>
           ) : null}
 
@@ -231,6 +217,23 @@ export default function SignIn() {
             loading={busy}
             disabled={!email || !password}
           />
+
+          <Txt
+            variant="captionStrong"
+            tone="brand"
+            accessibilityRole="button"
+            style={{ textAlign: 'center', marginTop: spacing.lg }}
+            onPress={() => enter(DEMO_EMAIL, DEMO_PASSWORD)}
+          >
+            Open the demo account
+          </Txt>
+          <Txt
+            variant="caption"
+            tone="tertiary"
+            style={{ textAlign: 'center', marginTop: spacing.xs }}
+          >
+            Comes with a sample project already part-finished.
+          </Txt>
         </Animated.View>
 
         <Row style={{ justifyContent: 'center', marginTop: spacing.xxl }} gap={spacing.xs}>
@@ -246,16 +249,6 @@ export default function SignIn() {
             Create an account
           </Txt>
         </Row>
-
-        <Txt
-          variant="caption"
-          tone="tertiary"
-          accessibilityRole="button"
-          style={{ textAlign: 'center', marginTop: spacing.xl }}
-          onPress={() => router.push('/server')}
-        >
-          Server settings
-        </Txt>
 
         <Txt
           variant="caption"

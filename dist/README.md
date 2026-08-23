@@ -17,47 +17,61 @@ package `com.trustpay.app`
    prompt appears for any app not from the Play Store.
 3. Install and open.
 
-## Connecting it to the backend
+There is no step 4. No server to start, no IP to enter, no firewall rule, no
+Wi-Fi requirement. The app runs entirely on the phone and works in aeroplane
+mode.
 
-The app talks to the FastAPI backend over your local network, so three things
-have to be true.
+## Getting in
 
-**1. The backend is running, listening on every interface:**
+Tap **Open the demo account** on the sign-in screen. It arrives with a wallet
+balance and a sample project already part-finished — one milestone released, one
+protected and waiting on review, one not yet funded — so every screen has
+something real in it.
 
-```bash
-cd backend
-./.venv/Scripts/python.exe -m uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
+You can also create your own account with **Create an account**. It is stored on
+the device; any email works, since nothing is sent anywhere.
 
-`--host 0.0.0.0` is not optional. The default binds to localhost, which the
-phone cannot reach.
+### Seeing both sides
 
-**2. Windows Firewall lets port 8000 in.** Run once, as Administrator:
+Escrow needs two parties, and this is one phone. A second account is included —
+`aarti@trustpay.app`, password `demo1234` — who is the receiver on the sample
+project. Sign out and back in as her to submit work, approve a cancellation
+code, or watch a payment arrive. That is how you walk a milestone end to end:
 
-```bash
-New-NetFirewallRule -DisplayName "TrustPay API 8000" -Direction Inbound -Protocol TCP -LocalPort 8000 -Action Allow -Profile Private
-```
+1. As the demo account (client), fund a milestone.
+2. Sign in as Aarti and submit the work.
+3. Sign back in as the client and approve — the money moves to her.
 
-Without this the phone gets no answer at all, which looks identical to the
-backend being down.
+## What is real here, and what is not
 
-**3. The app is pointed at the right address.** The phone and the computer must
-be on the same Wi-Fi. `ipconfig` shows the computer's IPv4 address.
+**Real.** The money logic is not a mock. Every movement is a double-entry
+transaction whose postings must sum to zero, balances are derived from those
+postings rather than stored alongside them, and amounts are integer paise so
+nothing drifts. The rules that make escrow mean anything are enforced, not
+decorative:
 
-That address is **a setting inside the app**, not a compile-time constant. If
-the app cannot reach the server, the sign-in screen offers **Check server
-address**; there is also a permanent **Server settings** link at the bottom of
-that screen. Type the IP — just `10.0.0.5`, the port and path are filled in for
-you — and tap **Test and save**. It verifies the address answers as TrustPay
-before storing it, so a typo fails loudly instead of silently.
+- A client cannot pull protected funds back alone. Cancelling a funded milestone
+  needs a code that goes to the receiver, and only the receiver can enter it.
+- A disputed milestone cannot be released or refunded by either side.
+- Milestones follow a fixed state machine; anything else is refused with a
+  reason rather than quietly allowed.
 
-This matters because the address changes on its own: during development it
-moved four times in one afternoon on a single network. It used to be baked into
-the bundle, which meant a rebuild every time. It no longer is.
+`npm run test:offline` in `mobile/` exercises all of it — 43 checks, including
+that the ledger balances and that no code path creates or destroys money.
 
-This build ships pointing at `http://10.215.14.115:8000/api/v1` by default —
-that was the machine's address when it was built, and it is only a starting
-guess. Change it in the app whenever it goes stale.
+**Not real.** This is one device keeping its own records:
+
+- Nothing is authoritative against another person. Aarti is an account on your
+  phone, not someone else's app.
+- The escrow is simulated. No funds are held by anyone, and no payment method is
+  involved.
+- The Trust Score is a fixed linear scorecard, not the trained model the server
+  version used. It is still fully attributable — the explanation screen shows
+  the exact contribution of each feature — but it is not a fitted model, and the
+  app says so.
+- The assistant and the agreement review answer from built-in checks, not a
+  language model. Every response is labelled `rules` in the UI rather than
+  passed off as AI.
 
 ## One thing to know before you distribute it
 
@@ -68,7 +82,15 @@ build. Generate a real keystore before this goes to anyone else.
 
 ## What is in it
 
-The full app: onboarding, sign-in, the milestone escrow workflow (fund →
-submit → approve → release), receiver-verified cancellation with OTP, disputes,
-notifications, the AI Trust Score, and the wallet pocket with the balance behind
-biometric or PIN unlock.
+Onboarding, sign-in, the milestone escrow workflow (fund → submit → approve →
+release), receiver-verified cancellation with OTP, disputes, notifications, the
+Trust Score with its explanation, the assistant, and the wallet pocket with the
+balance behind biometric or PIN unlock.
+
+## The backend is still here
+
+`backend/` still holds the full FastAPI server — double-entry ledger, auth,
+escrow, disputes, the trained Trust Score model and the Claude integration, with
+101 passing tests. Nothing was deleted. If you later want two people on two
+phones transacting for real, that server is what you deploy, and the app's data
+layer goes back to pointing at it.
