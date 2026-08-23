@@ -15,13 +15,17 @@
  *    into an axios error shape, and should never show a raw one.
  */
 
-import Constants from 'expo-constants';
 import axios, {
   AxiosError,
   AxiosInstance,
   InternalAxiosRequestConfig,
 } from 'axios';
 
+import {
+  defaultServerUrl,
+  loadSavedServerUrl,
+  saveServerUrl,
+} from './server-config';
 import { tokenStorage } from './storage';
 
 export type ApiErrorBody = {
@@ -58,43 +62,37 @@ export class ApiError extends Error {
 /**
  * Where the API lives.
  *
- * On a physical phone `localhost` is the phone itself, so the API has to be
- * reached at the development machine's LAN address — and that address changes
- * every time the machine rejoins a network. Hardcoding it means the app breaks
- * on the next reconnect, which it did twice while this was being built.
- *
- * So the host is derived from the one address that is guaranteed correct: the
- * one Metro is already serving this bundle from. Expo exposes it as `hostUri`
- * ("10.0.0.5:8081"); swapping Metro's port for the API's gives a base URL that
- * is right by construction.
- *
- * Resolution order:
- *   1. EXPO_PUBLIC_API_URL, if set — an explicit override always wins.
- *   2. Metro's host with the API port — the normal path on a device.
- *   3. localhost — web and simulators.
+ * This used to be resolved once, at module load, from a build-time constant.
+ * It is now owned by `server-config`, which can change it while the app is
+ * running — see the reasoning there. `api.defaults.baseURL` is the single
+ * source of truth, so everything below reads it rather than closing over a
+ * value captured at import time.
  */
-const API_PORT = 8000;
-
-function resolveBaseUrl(): string {
-  const override = process.env.EXPO_PUBLIC_API_URL;
-  if (override) return override;
-
-  // `hostUri` is "host:port"; the host half is the machine serving the bundle.
-  const hostUri =
-    Constants.expoConfig?.hostUri ??
-    // Older manifests put it here instead.
-    (Constants.manifest2 as { extra?: { expoGo?: { debuggerHost?: string } } } | null)
-      ?.extra?.expoGo?.debuggerHost;
-
-  const host = hostUri?.split(':')[0];
-  if (host && host !== 'localhost' && host !== '127.0.0.1') {
-    return `http://${host}:${API_PORT}/api/v1`;
-  }
-
-  return `http://127.0.0.1:${API_PORT}/api/v1`;
+/** The current base URL. Read it through `getBaseUrl()`, never cache it. */
+export function getBaseUrl(): string {
+  return api.defaults.baseURL ?? defaultServerUrl();
 }
 
-export const API_BASE_URL = resolveBaseUrl();
+/** Point the client at a different backend, for the rest of this launch. */
+export function setBaseUrl(url: string): void {
+  api.defaults.baseURL = url;
+}
+
+/** Point the client at a different backend and remember it across launches. */
+export async function persistBaseUrl(url: string): Promise<void> {
+  setBaseUrl(url);
+  await saveServerUrl(url);
+}
+
+/**
+ * Restore the saved address, if there is one. Called once during startup,
+ * before any query runs.
+ */
+export async function initBaseUrl(): Promise<string> {
+  const saved = await loadSavedServerUrl();
+  if (saved) setBaseUrl(saved);
+  return getBaseUrl();
+}
 
 let onSessionExpired: (() => void) | null = null;
 
@@ -103,7 +101,7 @@ export function setSessionExpiredHandler(handler: () => void) {
 }
 
 export const api: AxiosInstance = axios.create({
-  baseURL: API_BASE_URL,
+  baseURL: defaultServerUrl(),
   timeout: 15000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -127,7 +125,7 @@ async function refreshAccessToken(): Promise<string | null> {
     // A bare axios call, not `api` — going through the instance would recurse
     // straight back into this interceptor.
     const response = await axios.post(
-      `${API_BASE_URL}/auth/refresh`,
+      `${getBaseUrl()}/auth/refresh`,
       { refresh_token: refreshToken },
       { timeout: 15000 },
     );

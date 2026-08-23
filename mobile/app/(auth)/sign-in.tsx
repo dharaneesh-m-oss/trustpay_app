@@ -39,11 +39,15 @@ export default function SignIn() {
   const [password, setPassword] = useState('');
   const [focused, setFocused] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // A network failure is fixable on the server settings screen; a wrong
+  // password is not. Offering that link for both would be noise.
+  const [unreachable, setUnreachable] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const submit = async () => {
     if (!email || !password) return;
     setError(null);
+    setUnreachable(false);
     setBusy(true);
     try {
       await signIn(email.trim(), password);
@@ -51,6 +55,10 @@ export default function SignIn() {
     } catch (caught) {
       // The backend returns one message for a wrong password and an unknown
       // address alike, on purpose. Showing it verbatim keeps that property.
+      const offline =
+        caught instanceof ApiError &&
+        (caught.code === 'NETWORK_ERROR' || caught.code === 'TIMEOUT');
+      setUnreachable(offline);
       setError(
         caught instanceof ApiError
           ? caught.message
@@ -201,6 +209,17 @@ export default function SignIn() {
               <Txt variant="caption" tone="danger">
                 {error}
               </Txt>
+              {unreachable ? (
+                <Txt
+                  variant="captionStrong"
+                  tone="brand"
+                  accessibilityRole="button"
+                  style={{ marginTop: spacing.sm }}
+                  onPress={() => router.push('/server')}
+                >
+                  Check server address →
+                </Txt>
+              ) : null}
             </View>
           ) : null}
 
@@ -231,7 +250,17 @@ export default function SignIn() {
         <Txt
           variant="caption"
           tone="tertiary"
-          style={{ textAlign: 'center', marginTop: spacing.xl, paddingHorizontal: spacing.xxl }}
+          accessibilityRole="button"
+          style={{ textAlign: 'center', marginTop: spacing.xl }}
+          onPress={() => router.push('/server')}
+        >
+          Server settings
+        </Txt>
+
+        <Txt
+          variant="caption"
+          tone="tertiary"
+          style={{ textAlign: 'center', marginTop: spacing.md, paddingHorizontal: spacing.xxl }}
         >
           TrustPay is not a bank. Funds shown in demo mode are simulated.
         </Txt>

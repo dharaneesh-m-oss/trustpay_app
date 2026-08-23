@@ -13,7 +13,7 @@ import React, { useEffect, useState } from 'react';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { ApiError } from '@/lib/api';
+import { ApiError, initBaseUrl } from '@/lib/api';
 import { useAuth } from '@/store/auth';
 import { ThemeProvider, useTheme } from '@/theme';
 
@@ -47,15 +47,18 @@ function RootNavigator() {
   const [splashDone, setSplashDone] = useState(false);
 
   useEffect(() => {
-    restore();
+    // The backend address is a stored setting, and every request below depends
+    // on it — including the token refresh inside restore(). Load it first.
+    initBaseUrl().finally(() => restore());
   }, [restore]);
 
   useEffect(() => {
     if (isRestoring || !splashDone) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    const isPublic = inAuthGroup || segments[0] === 'server';
 
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !isPublic) {
       router.replace('/(auth)/welcome');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)/home');
@@ -97,6 +100,7 @@ function RootNavigator() {
         <Stack.Screen name="dispute/[id]" />
         <Stack.Screen name="trust-score" />
         <Stack.Screen name="assistant" />
+        <Stack.Screen name="server" />
       </Stack>
     </>
   );
