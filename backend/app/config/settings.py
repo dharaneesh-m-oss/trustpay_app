@@ -39,6 +39,16 @@ class Settings(BaseSettings):
 
     # ---------- Database ----------
     DATABASE_URL: str
+    """The Postgres URL.
+
+    Accepts whatever a hosting provider hands you. Neon, Supabase, Render and
+    Heroku all issue `postgresql://` (and Heroku still issues `postgres://`),
+    while SQLAlchemy needs the driver named explicitly - `postgresql+psycopg://`
+    for psycopg 3. Pasting the provider's URL unchanged would otherwise fail at
+    startup with an error about psycopg2, a package this project does not use
+    and which nobody would think to look for. See `_normalise_database_url`.
+    """
+
     DB_ECHO: bool = False
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
@@ -130,6 +140,32 @@ class Settings(BaseSettings):
 
     # ---------- CORS ----------
     CORS_ORIGINS: str = ""
+
+    @field_validator("DATABASE_URL")
+    @classmethod
+    def _normalise_database_url(cls, value: str) -> str:
+        """Name the driver, and require TLS on a hosted database."""
+        url = value.strip()
+
+        if url.startswith("postgres://"):
+            # Heroku's historical scheme, which SQLAlchemy dropped support for.
+            url = "postgresql://" + url[len("postgres://") :]
+
+        if url.startswith("postgresql://"):
+            url = "postgresql+psycopg://" + url[len("postgresql://") :]
+
+        # A managed Postgres reached over the public internet without TLS would
+        # put the password and every row on the wire in clear text. Providers
+        # include this in the URL they give you; a hand-edited one may not.
+        host = url.split("@")[-1].split("/")[0].lower()
+        remote = not any(
+            token in host for token in ("localhost", "127.0.0.1", "::1")
+        )
+        if remote and "sslmode=" not in url:
+            separator = "&" if "?" in url else "?"
+            url = f"{url}{separator}sslmode=require"
+
+        return url
 
     @field_validator("SECRET_KEY")
     @classmethod

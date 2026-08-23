@@ -1,5 +1,8 @@
 # Render deployment for the TrustPay API.
 #
+# Lives at the repository root because that is the only place Render's
+# Blueprint scanner looks; `rootDir` below points it at the backend.
+#
 # `alembic upgrade head` runs on every start rather than as a one-off: a
 # container that boots against a schema it does not expect is a worse failure
 # than a slightly slower start, and Alembic is a no-op when there is nothing to
