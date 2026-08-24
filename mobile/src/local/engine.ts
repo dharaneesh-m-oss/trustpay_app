@@ -45,6 +45,14 @@ import {
   summariseDispute,
   trustScorePayload,
 } from './intelligence';
+import {
+  addBankAccount,
+  addUpiAccount,
+  normaliseIfsc as normaliseIfscOrThrow,
+  paymentsStatus,
+  serialiseBankAccount,
+  serialiseUpiAccount,
+} from './payments';
 
 /** The demo counterparty, so the two-sided flows can actually be walked. */
 export const COUNTERPARTY_EMAIL = 'aarti@trustpay.app';
@@ -296,183 +304,42 @@ async function createUser(
   return user;
 }
 
-/** Simulated money entering the system, so a demo wallet is not empty. */
-function grantDemoFunds(db: Database, userId: string, rupees: number) {
-  post(db, {
-    type: 'TOP_UP',
-    description: 'Demo balance',
-    legs: [
-      { account: accountFor(db, null, 'EXTERNAL'), amount: -toPaise(rupees) },
-      { account: accountFor(db, userId, 'AVAILABLE'), amount: toPaise(rupees) },
-    ],
-  });
-}
-
 /**
- * Give a new account something to look at.
+ * Make sure the store has the two accounts the flows need.
  *
- * An escrow app with no projects shows nothing but empty states, and every
- * flow worth seeing needs two parties. So each new account gets one project
- * with the demo counterparty, already part-finished: one milestone released,
- * one protected and waiting on review, one not yet funded. That covers the
- * three states the screens are built around without pretending to be activity
- * the user actually did - the project is plainly named as a sample.
- */
-function seedSampleProject(db: Database, clientId: string, receiverId: string) {
-  const project: LocalProject = {
-    id: newId(),
-    title: 'Sample: Brand website build',
-    description:
-      'A worked example, created automatically so you can see how a project behaves. Delete it whenever you like.',
-    status: 'ACTIVE',
-    currency: 'INR',
-    client_id: clientId,
-    receiver_id: receiverId,
-    invited_receiver_email: null,
-    agreement_text:
-      'Three stages: design, build, launch. Each stage is approved before the next begins. Revisions are limited to two per stage and must be requested within five days of submission.',
-    start_date: daysAgoIso(21),
-    end_date: daysFromNowIso(24),
-    created_at: daysAgoIso(21),
-  };
-  db.projects.push(project);
-
-  const specs: {
-    title: string;
-    description: string;
-    criteria: string;
-    rupees: number;
-    due: string;
-    status: MilestoneStatus;
-  }[] = [
-    {
-      title: 'Design system and page layouts',
-      description: 'Type scale, colour, and layouts for the five core pages.',
-      criteria:
-        'A shared design file containing the five page layouts at desktop and mobile widths, using one documented type and colour scale.',
-      rupees: 18000,
-      due: daysAgoIso(9),
-      status: 'RELEASED',
-    },
-    {
-      title: 'Front-end build',
-      description: 'The approved designs, built and responsive.',
-      criteria:
-        'A staging link where all five pages match the approved designs, work down to 360px wide, and score at least 90 on Lighthouse performance.',
-      rupees: 26000,
-      due: daysFromNowIso(6),
-      status: 'SUBMITTED',
-    },
-    {
-      title: 'Launch and handover',
-      description: 'Deploy to production and hand over access.',
-      criteria:
-        'The site live on the production domain with a valid certificate, plus repository access and a written handover note.',
-      rupees: 12000,
-      due: daysFromNowIso(24),
-      status: 'PENDING',
-    },
-  ];
-
-  specs.forEach((spec, index) => {
-    const milestone: LocalMilestone = {
-      id: newId(),
-      project_id: project.id,
-      sequence: index + 1,
-      title: spec.title,
-      description: spec.description,
-      completion_criteria: spec.criteria,
-      amount: toPaise(spec.rupees),
-      due_date: spec.due,
-      status: spec.status,
-      revision_limit: 2,
-      revisions_used: 0,
-      released_at: spec.status === 'RELEASED' ? daysAgoIso(10) : null,
-    };
-    db.milestones.push(milestone);
-
-    if (spec.status === 'RELEASED') {
-      post(db, {
-        type: 'MILESTONE_FUNDING',
-        description: 'Protected for ' + spec.title,
-        milestoneId: milestone.id,
-        legs: [
-          { account: accountFor(db, clientId, 'AVAILABLE'), amount: -milestone.amount },
-          { account: accountFor(db, clientId, 'PROTECTED'), amount: milestone.amount },
-        ],
-      });
-      post(db, {
-        type: 'PAYMENT_RELEASE',
-        description: 'Released for ' + spec.title,
-        milestoneId: milestone.id,
-        legs: [
-          { account: accountFor(db, clientId, 'PROTECTED'), amount: -milestone.amount },
-          { account: accountFor(db, receiverId, 'AVAILABLE'), amount: milestone.amount },
-        ],
-      });
-    }
-
-    if (spec.status === 'SUBMITTED') {
-      post(db, {
-        type: 'MILESTONE_FUNDING',
-        description: 'Protected for ' + spec.title,
-        milestoneId: milestone.id,
-        legs: [
-          { account: accountFor(db, clientId, 'AVAILABLE'), amount: -milestone.amount },
-          { account: accountFor(db, clientId, 'PROTECTED'), amount: milestone.amount },
-        ],
-      });
-      db.submissions.push({
-        id: newId(),
-        milestone_id: milestone.id,
-        attempt: 1,
-        note: 'Staging link is up and all five pages are responsive. Lighthouse performance is 94.',
-        completion_percentage: 100,
-        evidence: [{ type: 'link', label: 'Staging site', url: 'https://staging.example.com' }],
-        review_note: null,
-        reviewed_at: null,
-        created_at: daysAgoIso(1),
-      });
-      notify(db, clientId, {
-        type: 'MILESTONE_SUBMITTED',
-        severity: 'INFO',
-        title: 'Work submitted for review',
-        body: 'Aarti submitted "' + spec.title + '". Approving releases the protected funds.',
-        target: { screen: 'milestone', id: milestone.id },
-      });
-    }
-  });
-}
-
-/**
- * Make sure the store has the demo counterparty and a signed-in-able account.
+ * Two accounts and nothing else. There is deliberately no sample project, no
+ * invented submission and no starting balance: fabricated history is
+ * indistinguishable from real history once it is on the screen, and a wallet
+ * that begins with money it was never given teaches the wrong thing about where
+ * a balance comes from.
+ *
+ * Both accounts start empty. Add money (simulated, and labelled so), create a
+ * project, and every screen fills with activity that actually happened.
  *
  * Runs on every launch but only fills in what is missing, so it is safe to call
  * repeatedly and never overwrites anything the user has done.
  */
 export async function ensureSeeded(): Promise<void> {
   await mutate(async (db) => {
-    let counterparty = db.users.find(
+    const counterparty = db.users.find(
       (user) => user.email === COUNTERPARTY_EMAIL,
     );
     if (!counterparty) {
-      counterparty = await createUser(db, {
-        name: 'Aarti Rao',
+      // The second party, so the two-sided flows can be walked on one phone.
+      await createUser(db, {
+        name: 'Second Account',
         email: COUNTERPARTY_EMAIL,
         password: DEMO_PASSWORD,
       });
-      grantDemoFunds(db, counterparty.id, 4000);
     }
 
     const existingDemo = db.users.find((user) => user.email === DEMO_EMAIL);
     if (!existingDemo) {
-      const demo = await createUser(db, {
-        name: 'Dharaneesh M',
+      await createUser(db, {
+        name: 'Demo Account',
         email: DEMO_EMAIL,
         password: DEMO_PASSWORD,
       });
-      grantDemoFunds(db, demo.id, 85000);
-      seedSampleProject(db, demo.id, counterparty.id);
     }
   });
 }
@@ -614,6 +481,8 @@ export async function handle(request: LocalRequest): Promise<LocalResponse> {
         return handleNotifications(db, user, request, parts);
       case 'ai':
         return handleAi(db, user, request, parts);
+      case 'payments':
+        return handlePayments(db, user, request, parts);
       default:
         throw notFound('That page');
     }
@@ -653,14 +522,8 @@ async function handleAuth(
       const user = await createUser(db, { name: name || 'You', email, password });
       user.created_at = nowIso();
 
-      // A brand new account with an empty wallet and no projects has nothing to
-      // show, so it starts with demo funds and the same worked example.
-      grantDemoFunds(db, user.id, 85000);
-      const counterparty = db.users.find(
-        (candidate) => candidate.email === COUNTERPARTY_EMAIL,
-      );
-      if (counterparty) seedSampleProject(db, user.id, counterparty.id);
-
+      // No starting balance and no sample project. An account begins with
+      // nothing, exactly as a real one would.
       return { status: 201, data: publicUser(user) };
     });
   }
@@ -1523,6 +1386,108 @@ function handleAi(
 
   if (parts[1] === 'assistant' && request.method === 'POST') {
     return ok(askAssistant(str(request.body, 'question')));
+  }
+
+  throw notFound('That page');
+}
+
+function handlePayments(
+  db: Database,
+  user: LocalUser,
+  request: LocalRequest,
+  parts: string[],
+): LocalResponse {
+  if (parts[1] === 'status') {
+    return ok(paymentsStatus());
+  }
+
+  if (parts[1] === 'bank-accounts') {
+    if (request.method === 'GET') {
+      return ok(
+        db.bankAccounts
+          .filter((account) => account.user_id === user.id)
+          .map(serialiseBankAccount),
+      );
+    }
+    if (request.method === 'POST') {
+      try {
+        const account = addBankAccount(db, user, {
+          account_number: str(request.body, 'account_number'),
+          ifsc: str(request.body, 'ifsc'),
+          holder_name: str(request.body, 'holder_name'),
+        });
+        return { status: 201, data: serialiseBankAccount(account) };
+      } catch (caught) {
+        throw badRequest(
+          caught instanceof Error ? caught.message : 'Those details are not valid.',
+        );
+      }
+    }
+  }
+
+  if (parts[1] === 'upi-accounts') {
+    if (request.method === 'GET') {
+      return ok(
+        db.upiAccounts
+          .filter((account) => account.user_id === user.id)
+          .map(serialiseUpiAccount),
+      );
+    }
+    if (request.method === 'POST') {
+      try {
+        const account = addUpiAccount(db, user, {
+          vpa: str(request.body, 'vpa'),
+          holder_name: str(request.body, 'holder_name'),
+        });
+        return { status: 201, data: serialiseUpiAccount(account) };
+      } catch (caught) {
+        throw badRequest(
+          caught instanceof Error ? caught.message : 'That UPI ID is not valid.',
+        );
+      }
+    }
+  }
+
+  if (parts[1] === 'ifsc') {
+    // Format only. There is no registry to ask on a device with no server, and
+    // returning an invented bank name would be worse than saying so.
+    try {
+      const ifsc = normaliseIfscOrThrow(str(request.query, 'ifsc') || parts[2] || '');
+      return ok({
+        ifsc,
+        bank: 'Bank ' + ifsc.slice(0, 4),
+        branch: 'Not looked up — demo mode has no bank registry',
+        city: '',
+        state: '',
+        supports_imps: false,
+        supports_neft: false,
+      });
+    } catch (caught) {
+      throw badRequest(
+        caught instanceof Error ? caught.message : 'That IFSC is not valid.',
+      );
+    }
+  }
+
+  if (parts[1] === 'payouts') {
+    if (request.method === 'GET') return ok([]);
+    // Refusing is the honest answer. Simulating a payout would teach someone
+    // that money left, when nothing did.
+    throw new ApiFault(
+      503,
+      'PAYMENTS_NOT_ENABLED',
+      'Withdrawals need the TrustPay server and a payment provider. This build ' +
+        'runs on your device, so it cannot move real money.',
+    );
+  }
+
+  if (parts[1] === 'top-up') {
+    throw new ApiFault(
+      503,
+      'PAYMENTS_NOT_ENABLED',
+      'Adding money by UPI needs the TrustPay server and a payment provider. ' +
+        'In this build, use Add money to credit simulated funds instead.',
+    );
   }
 
   throw notFound('That page');

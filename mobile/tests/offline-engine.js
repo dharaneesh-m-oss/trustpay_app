@@ -7,6 +7,16 @@
  * postings must sum to zero, and the whole ledger must sum to zero. Together
  * they mean no code path can quietly invent or destroy money.
  *
+ * The fixtures are built by the test rather than shipped in the app. That is
+ * the right way round: seeded sample data would be indistinguishable from real
+ * data on a user's screen, and a test that leans on it is really testing the
+ * seed rather than the engine.
+ *
+ * The fixtures are built by the test rather than shipped in the app. That is
+ * the right way round: seeded sample data would be indistinguishable from real
+ * data on a user's screen, and a test that leans on it is really testing the
+ * seed rather than the engine.
+ *
  * Run with: npm run test:offline
  */
 
@@ -105,6 +115,26 @@ async function main() {
   await engine.ensureSeeded(); // must be idempotent
   const db = await core.loadDb();
   check('seeding twice does not duplicate users', db.users.length === 2, String(db.users.length));
+  check(
+    'a seeded account starts with no fabricated money',
+    db.postings.length === 0,
+    db.postings.length + ' postings',
+  );
+  check(
+    'a seeded account starts with no fabricated projects',
+    db.projects.length === 0,
+    db.projects.length + ' projects',
+  );
+  check(
+    'a seeded account starts with no fabricated money',
+    db.postings.length === 0,
+    db.postings.length + ' postings',
+  );
+  check(
+    'a seeded account starts with no fabricated projects',
+    db.projects.length === 0,
+    db.projects.length + ' projects',
+  );
 
   console.log('\n--- auth ---');
   const login = await call('POST', 'auth/login', {
@@ -134,9 +164,15 @@ async function main() {
 
   console.log('\n--- wallet ---');
   let wallet = (await call('GET', 'wallet', {}, token)).data;
-  const startingAvailable = wallet.available;
-  check('wallet reports a balance', Number(startingAvailable) > 0, startingAvailable);
+  check('a new wallet is empty', Number(wallet.available) === 0, wallet.available);
   check('demo mode is declared', wallet.demo_mode === true);
+
+  // Everything below needs funds, so put them in deliberately - which is now
+  // the only way a balance appears at all.
+  await call('POST', 'wallet/top-up', { amount: '90000.00' }, token);
+  wallet = (await call('GET', 'wallet', {}, token)).data;
+  const startingAvailable = wallet.available;
+  check('adding money credits the wallet', Number(startingAvailable) === 90000, startingAvailable);
 
   await call('POST', 'wallet/top-up', { amount: '500.00', idempotency_key: 'k1' }, token);
   await call('POST', 'wallet/top-up', { amount: '500.00', idempotency_key: 'k1' }, token);
@@ -154,14 +190,31 @@ async function main() {
   );
 
   console.log('\n--- escrow happy path ---');
-  const projects = (await call('GET', 'projects', {}, token)).data;
-  check('sample project is present', projects.items.length === 1, String(projects.items.length));
+  const built = (
+    await call(
+      'POST',
+      'projects',
+      {
+        title: 'Website build',
+        description: 'Two stages.',
+        receiver_email: engine.COUNTERPARTY_EMAIL,
+        milestones: [
+          { title: 'Design', description: 'Layouts', completion_criteria: 'A shared file with five page layouts.', amount: '18000.00' },
+          { title: 'Build', description: 'Front end', completion_criteria: 'A staging link matching the designs.', amount: '26000.00' },
+        ],
+      },
+      token,
+    )
+  ).data;
+  await call('POST', 'projects/' + built.id + '/accept', {}, aarti);
 
-  const detail = (await call('GET', 'projects/' + projects.items[0].id, {}, token)).data;
-  const pending = detail.milestones.find((m) => m.status === 'PENDING');
-  const submitted = detail.milestones.find((m) => m.status === 'SUBMITTED');
-  check('sample has a fundable milestone', Boolean(pending));
-  check('sample has one awaiting review', Boolean(submitted));
+  const projects = (await call('GET', 'projects', {}, token)).data;
+  check('the created project is listed', projects.items.length === 1, String(projects.items.length));
+
+  const detail = (await call('GET', 'projects/' + built.id, {}, token)).data;
+  const pending = detail.milestones[0];
+  const submitted = detail.milestones[1];
+  check('milestones start unfunded', pending.status === 'PENDING', pending.status);
 
   const beforeFund = (await call('GET', 'wallet', {}, token)).data;
   await call('POST', 'milestones/' + pending.id + '/fund', { idempotency_key: 'f1' }, token);
@@ -227,7 +280,7 @@ async function main() {
   await assertConservation('no money was created or destroyed');
 
   console.log('\n--- cancellation protection ---');
-  await call('POST', 'milestones/' + submitted.id + '/request-changes', { note: 'Redo nav' }, token);
+  await call('POST', 'milestones/' + submitted.id + '/fund', {}, token);
   const cancellation = (
     await call(
       'POST',
@@ -269,7 +322,7 @@ async function main() {
   );
 
   console.log('\n--- disputes freeze funds ---');
-  const created = (
+  const disputed = (
     await call(
       'POST',
       'projects',
@@ -284,8 +337,8 @@ async function main() {
       token,
     )
   ).data;
-  await call('POST', 'projects/' + created.id + '/accept', {}, aarti);
-  const target = created.milestones[0];
+  await call('POST', 'projects/' + disputed.id + '/accept', {}, aarti);
+  const target = disputed.milestones[0];
   await call('POST', 'milestones/' + target.id + '/fund', {}, token);
   await call('POST', 'disputes', { milestone_id: target.id, reason: 'Quality', description: 'x' }, token);
 
@@ -354,6 +407,62 @@ async function main() {
     'funding reads as internal, not a debit',
     funding && funding.direction_for_user === 'INTERNAL',
     funding ? funding.direction_for_user : 'none',
+  );
+
+  console.log('\n--- payout destinations (the screens that 404d before) ---');
+  const paymentsState = (await call('GET', 'payments/status', {}, token)).data;
+  check(
+    'payments status is reachable and honest',
+    paymentsState.collections_enabled === false &&
+      paymentsState.payouts_enabled === false,
+    JSON.stringify(paymentsState).slice(0, 60),
+  );
+
+  const upi = (
+    await call('POST', 'payments/upi-accounts', { vpa: 'demo@okhdfcbank', holder_name: 'Demo Account' }, token)
+  ).data;
+  check('a UPI ID can be saved', upi.vpa === 'demo@okhdfcbank', upi.vpa);
+  check(
+    'a saved UPI ID is never claimed as verified',
+    upi.status === 'PENDING' && Boolean(upi.failure_reason),
+    upi.status,
+  );
+
+  const upiList = (await call('GET', 'payments/upi-accounts', {}, token)).data;
+  check('saved UPI IDs are listed', upiList.length === 1, String(upiList.length));
+
+  await expectFault(
+    'a malformed UPI ID is refused',
+    () => call('POST', 'payments/upi-accounts', { vpa: 'nohandle', holder_name: 'Demo Account' }, token),
+    'VALIDATION_ERROR',
+  );
+  await expectFault(
+    "somebody else's name is refused",
+    () => call('POST', 'payments/upi-accounts', { vpa: 'other@ybl', holder_name: 'Rahul Verma' }, token),
+    'VALIDATION_ERROR',
+  );
+
+  const bank = (
+    await call('POST', 'payments/bank-accounts', { account_number: '123456789012', ifsc: 'SBIN0001234', holder_name: 'Demo Account' }, token)
+  ).data;
+  check('a bank account can be saved', bank.account_last4 === '9012', bank.account_last4);
+  check('a saved bank account is not claimed as verified', bank.status === 'PENDING', bank.status);
+
+  await expectFault(
+    'a malformed IFSC is refused',
+    () => call('POST', 'payments/bank-accounts', { account_number: '123456789012', ifsc: 'SBIN1001234', holder_name: 'Demo Account' }, token),
+    'VALIDATION_ERROR',
+  );
+
+  await expectFault(
+    'withdrawing to a destination refuses rather than pretending',
+    () => call('POST', 'payments/payouts', { amount: '500.00', upi_account_id: upi.id }, token),
+    'PAYMENTS_NOT_ENABLED',
+  );
+  await expectFault(
+    'UPI top-up refuses rather than pretending',
+    () => call('POST', 'payments/top-up', { amount: '500.00' }, token),
+    'PAYMENTS_NOT_ENABLED',
   );
 
   await assertLedgerBalanced('ledger still balanced at the end');

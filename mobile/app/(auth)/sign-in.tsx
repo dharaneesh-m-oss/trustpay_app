@@ -182,7 +182,11 @@ export default function SignIn() {
             </Txt>
           </View>
 
-          <Chip label={getMode() === 'live' ? 'trustpay' : 'demo mode'} />
+          <Txt accessibilityRole="button" onPress={() => router.push('/connect')}>
+            <Chip
+              label={getMode() === 'live' ? 'connected · tap to change' : 'on this device · tap to connect'}
+            />
+          </Txt>
         </Animated.View>
 
         {/* ---------------------------------------------------------- form */}

@@ -61,8 +61,12 @@ function RootNavigator() {
     if (isRestoring || !splashDone) return;
 
     const inAuthGroup = segments[0] === '(auth)';
+    // Connect is public: a wrong or missing server address is the usual
+    // reason sign-in fails, so bouncing it away would lock the user out of
+    // the only screen that fixes it.
+    const isPublic = inAuthGroup || segments[0] === 'connect';
 
-    if (!isAuthenticated && !inAuthGroup) {
+    if (!isAuthenticated && !isPublic) {
       router.replace('/(auth)/welcome');
     } else if (isAuthenticated && inAuthGroup) {
       router.replace('/(tabs)/home');
@@ -108,6 +112,7 @@ function RootNavigator() {
         <Stack.Screen name="dispute/[id]" />
         <Stack.Screen name="trust-score" />
         <Stack.Screen name="assistant" />
+        <Stack.Screen name="connect" />
       </Stack>
     </>
   );

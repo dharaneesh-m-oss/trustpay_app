@@ -29,7 +29,13 @@ import axios, {
 
 import { localAdapter } from '@/local/adapter';
 
-import { LIVE_API_URL, loadMode, saveMode, type AppMode } from './mode';
+import {
+  loadMode,
+  saveMode,
+  saveServerUrl,
+  serverUrl,
+  type AppMode,
+} from './mode';
 import { tokenStorage } from './storage';
 
 export type ApiErrorBody = {
@@ -70,7 +76,7 @@ export function setSessionExpiredHandler(handler: () => void) {
 }
 
 export const api: AxiosInstance = axios.create({
-  baseURL: LIVE_API_URL || '/',
+  baseURL: serverUrl() || '/',
   timeout: 20000,
   headers: { 'Content-Type': 'application/json' },
 });
@@ -90,7 +96,7 @@ export function getMode(): AppMode {
 export function applyMode(mode: AppMode): void {
   currentMode = mode;
   if (mode === 'live') {
-    api.defaults.baseURL = LIVE_API_URL;
+    api.defaults.baseURL = serverUrl();
     api.defaults.adapter = undefined;
   } else {
     api.defaults.baseURL = '/';
@@ -109,6 +115,18 @@ export async function initMode(): Promise<AppMode> {
 export async function switchMode(mode: AppMode): Promise<void> {
   applyMode(mode);
   await saveMode(mode);
+}
+
+/**
+ * Point the app at a deployed server and go live.
+ *
+ * Saving the address and switching mode are one operation because doing either
+ * alone leaves the app in a state nobody asked for: an address it is not using,
+ * or live mode with nowhere to call.
+ */
+export async function connectToServer(url: string): Promise<void> {
+  await saveServerUrl(url);
+  await switchMode('live');
 }
 
 // Until startup runs, assume demo: it cannot accidentally send anything.

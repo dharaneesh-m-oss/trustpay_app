@@ -207,6 +207,35 @@ export type LocalDispute = {
   messages: LocalDisputeMessage[];
 };
 
+export type PayoutDestinationStatus = 'PENDING' | 'VERIFIED' | 'REJECTED' | 'FAILED';
+
+export type LocalBankAccount = {
+  id: string;
+  user_id: string;
+  holder_name: string;
+  ifsc: string;
+  bank_name: string;
+  branch: string;
+  account_last4: string;
+  status: PayoutDestinationStatus;
+  is_default: boolean;
+  verified_at: string | null;
+  failure_reason: string | null;
+  name_match_score: number | null;
+};
+
+export type LocalUpiAccount = {
+  id: string;
+  user_id: string;
+  vpa: string;
+  holder_name: string;
+  status: PayoutDestinationStatus;
+  is_default: boolean;
+  verified_at: string | null;
+  failure_reason: string | null;
+  name_match_score: number | null;
+};
+
 export type LocalNotification = {
   id: string;
   user_id: string;
@@ -231,6 +260,8 @@ export type Database = {
   cancellations: LocalCancellation[];
   disputes: LocalDispute[];
   notifications: LocalNotification[];
+  bankAccounts: LocalBankAccount[];
+  upiAccounts: LocalUpiAccount[];
   /** Opaque token to user id. The offline stand-in for a session. */
   sessions: Record<string, string>;
 };
@@ -248,6 +279,8 @@ export function emptyDb(): Database {
     cancellations: [],
     disputes: [],
     notifications: [],
+    bankAccounts: [],
+    upiAccounts: [],
     sessions: {},
   };
 }
