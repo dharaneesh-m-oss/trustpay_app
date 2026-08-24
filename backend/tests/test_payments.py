@@ -267,3 +267,64 @@ def test_upi_ids_are_lowercased_on_the_way_in():
 
     payload = UpiAccountCreateRequest(vpa="  Someone@OkHdfcBank ", holder_name="Priya Sharma")
     assert payload.vpa == "someone@okhdfcbank"
+
+
+# ------------------------------------------------------------ google sign-in
+
+def test_google_audiences_come_from_configuration(monkeypatch):
+    """The audience list is what stops a validly-signed token issued to some
+    other application signing in here."""
+    from app.config.settings import settings as live
+
+    monkeypatch.setattr(live, "GOOGLE_CLIENT_ID", "web-id", raising=False)
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", "android-id", raising=False)
+    assert live.google_audiences == ["web-id", "android-id"]
+    assert live.google_configured is True
+
+    monkeypatch.setattr(live, "GOOGLE_CLIENT_ID", None, raising=False)
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", None, raising=False)
+    assert live.google_audiences == []
+    assert live.google_configured is False
+
+
+def test_google_sign_in_refuses_when_unconfigured(monkeypatch):
+    from app.auth.google import GoogleAuthError, verify_id_token
+    from app.config.settings import settings as live
+
+    monkeypatch.setattr(live, "GOOGLE_CLIENT_ID", None, raising=False)
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", None, raising=False)
+
+    with pytest.raises(GoogleAuthError):
+        verify_id_token("a.b.c")
+
+
+@pytest.mark.parametrize("token", ["", "not-a-token", "only.two"])
+def test_malformed_google_tokens_are_rejected_before_any_network_call(monkeypatch, token):
+    """A token that is not three dot-separated parts cannot be a JWT, and
+    saying so locally avoids a pointless round trip to Google."""
+    from app.auth.google import GoogleAuthError, verify_id_token
+    from app.config.settings import settings as live
+
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", "android-id", raising=False)
+
+    with pytest.raises(GoogleAuthError):
+        verify_id_token(token)
+
+
+def test_google_failures_are_client_errors_not_500s(monkeypatch):
+    """A bad token is the caller's problem; an unconfigured deployment is ours.
+    Neither is an internal fault, and returning 500 for either hides the reason
+    behind a generic apology."""
+    from app.auth.google import GoogleAuthError, verify_id_token
+    from app.config.settings import settings as live
+
+    monkeypatch.setattr(live, "GOOGLE_CLIENT_ID", None, raising=False)
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", None, raising=False)
+    with pytest.raises(GoogleAuthError) as unconfigured:
+        verify_id_token("a.b.c")
+    assert unconfigured.value.status_code == 503
+
+    monkeypatch.setattr(live, "GOOGLE_ANDROID_CLIENT_ID", "android-id", raising=False)
+    with pytest.raises(GoogleAuthError) as malformed:
+        verify_id_token("not-a-jwt")
+    assert malformed.value.status_code == 401

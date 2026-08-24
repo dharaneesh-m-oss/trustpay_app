@@ -25,6 +25,7 @@ import jwt
 from jwt import PyJWKClient
 
 from app.config.settings import settings
+from app.core.exceptions import AuthenticationError
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +37,18 @@ GOOGLE_ISSUERS = ("https://accounts.google.com", "accounts.google.com")
 _jwk_client = PyJWKClient(GOOGLE_CERTS, cache_keys=True)
 
 
-class GoogleAuthError(Exception):
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
+class GoogleAuthError(AuthenticationError):
+    """A Google sign-in that could not be verified.
+
+    Deliberately part of the app's error hierarchy rather than a bare
+    Exception. A plain Exception reaches the generic handler and becomes a 500,
+    which tells the user "something went wrong on our side" for what is almost
+    always a client-side or configuration problem - and buries the real reason
+    in a request id nobody can look up.
+    """
+
+    code = "GOOGLE_SIGN_IN_FAILED"
+    status_code = 401
 
 
 @dataclass(frozen=True)
@@ -53,8 +62,11 @@ class GoogleIdentity:
 
 def verify_id_token(id_token: str) -> GoogleIdentity:
     if not settings.google_configured:
+        # Not the caller's fault, so not a 401: the deployment simply cannot do
+        # this yet. The app hides the button, but a stale build may still ask.
         raise GoogleAuthError(
-            "Google sign-in is not configured for this deployment."
+            "Google sign-in is not switched on for this deployment.",
+            status_code=503,
         )
 
     if not id_token or id_token.count(".") != 2:
