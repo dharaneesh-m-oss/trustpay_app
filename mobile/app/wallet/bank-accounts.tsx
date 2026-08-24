@@ -269,6 +269,20 @@ export default function BankAccounts() {
         </SoftCard>
       </View>
 
+      <SoftCard depth="sm" onPress={() => router.push('/wallet/upi-accounts')}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <View style={{ flex: 1, paddingRight: spacing.md }}>
+            <Txt variant="bodyStrong">Withdraw to a UPI ID instead</Txt>
+            <Txt variant="caption" tone="secondary">
+              BHIM, GPay, PhonePe or your bank's app. Usually arrives in seconds.
+            </Txt>
+          </View>
+          <Txt variant="body" tone="secondary">
+            →
+          </Txt>
+        </Row>
+      </SoftCard>
+
       <Txt
         variant="caption"
         tone="tertiary"

@@ -65,6 +65,17 @@ export type BankAccount = {
   name_match_score: number | null;
 };
 
+export type UpiAccount = {
+  id: string;
+  vpa: string;
+  holder_name: string;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED' | 'FAILED';
+  is_default: boolean;
+  verified_at: string | null;
+  failure_reason: string | null;
+  name_match_score: number | null;
+};
+
 export type IfscLookup = {
   ifsc: string;
   bank: string;
@@ -81,7 +92,9 @@ export type Payout = {
   currency: string;
   status: 'REQUESTED' | 'PROCESSING' | 'PROCESSED' | 'REVERSED' | 'FAILED';
   reference: string;
-  bank_account_id: string;
+  bank_account_id: string | null;
+  upi_account_id: string | null;
+  destination: 'bank' | 'upi';
   failure_reason: string | null;
   created_at: string;
   completed_at: string | null;
@@ -90,6 +103,7 @@ export type Payout = {
 export const paymentKeys = {
   status: ['payments', 'status'] as const,
   bankAccounts: ['payments', 'bank-accounts'] as const,
+  upiAccounts: ['payments', 'upi-accounts'] as const,
   payouts: ['payments', 'payouts'] as const,
   intent: (id: string) => ['payments', 'intent', id] as const,
 };
@@ -133,6 +147,23 @@ export function useAddBankAccount() {
   });
 }
 
+export function useUpiAccounts() {
+  return useQuery({
+    queryKey: paymentKeys.upiAccounts,
+    queryFn: async () => (await api.get<UpiAccount[]>('/payments/upi-accounts')).data,
+  });
+}
+
+export function useAddUpiAccount() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { vpa: string; holder_name: string }) =>
+      (await api.post<UpiAccount>('/payments/upi-accounts', input)).data,
+    onSuccess: () =>
+      client.invalidateQueries({ queryKey: paymentKeys.upiAccounts }),
+  });
+}
+
 export function useStartTopUp() {
   return useMutation({
     mutationFn: async (amount: string) =>
@@ -150,8 +181,11 @@ export function usePayouts() {
 export function useRequestPayout() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: async (input: { amount: string; bank_account_id: string }) =>
-      (await api.post<Payout>('/payments/payouts', input)).data,
+    mutationFn: async (
+      input:
+        | { amount: string; bank_account_id: string }
+        | { amount: string; upi_account_id: string },
+    ) => (await api.post<Payout>('/payments/payouts', input)).data,
     onSuccess: () => {
       client.invalidateQueries({ queryKey: paymentKeys.payouts });
       client.invalidateQueries({ queryKey: walletKeys.wallet });

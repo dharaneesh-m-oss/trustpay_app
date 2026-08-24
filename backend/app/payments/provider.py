@@ -176,6 +176,63 @@ class ProviderPayout:
     raw: dict[str, Any]
 
 
+async def create_upi_payout(
+    *,
+    amount: Decimal,
+    vpa: str,
+    beneficiary_name: str,
+    reference: str,
+    timeout: float = 20.0,
+) -> ProviderPayout:
+    """Send money to a UPI ID.
+
+    Same two-step shape as a bank payout: queued here, terminal state by
+    webhook. UPI settles in seconds rather than minutes, which changes how long
+    the wait feels and not what the code may assume.
+    """
+    if not payouts_configured():
+        raise ProviderNotConfigured()
+
+    payload = {
+        "account_number": settings.RAZORPAY_PAYOUT_ACCOUNT,
+        "amount": to_paise(amount),
+        "currency": "INR",
+        "mode": "UPI",
+        "purpose": "payout",
+        "queue_if_low_balance": True,
+        "reference_id": reference,
+        "narration": "TrustPay withdrawal",
+        "fund_account": {
+            "account_type": "vpa",
+            "vpa": {"address": vpa},
+            "contact": {"name": beneficiary_name, "type": "customer"},
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                "https://api.razorpay.com/v1/payouts",
+                json=payload,
+                auth=_auth(),
+                headers={"X-Payout-Idempotency": reference},
+            )
+    except httpx.HTTPError as exc:
+        raise ProviderError(
+            "Could not reach the payout provider.", retryable=True
+        ) from exc
+
+    if response.status_code >= 500:
+        raise ProviderError("The payout provider is having trouble.", retryable=True)
+    if response.status_code >= 400:
+        raise ProviderError(_error_detail(response))
+
+    body = response.json()
+    return ProviderPayout(
+        payout_id=body["id"], status=body.get("status", "processing"), raw=body
+    )
+
+
 async def create_payout(
     *,
     amount: Decimal,
@@ -237,6 +294,43 @@ async def create_payout(
     return ProviderPayout(
         payout_id=body["id"], status=body.get("status", "processing"), raw=body
     )
+
+
+async def validate_vpa(
+    *, vpa: str, name: str, timeout: float = 20.0
+) -> dict[str, Any]:
+    """Check a UPI ID exists and learn the name registered against it.
+
+    The UPI equivalent of a penny drop, and cheaper: the provider queries the
+    UPI directory rather than moving a rupee, so this costs a fraction and
+    returns the registered name directly.
+    """
+    if not payouts_configured():
+        raise ProviderNotConfigured()
+
+    payload = {
+        "account_number": settings.RAZORPAY_PAYOUT_ACCOUNT,
+        "fund_account": {
+            "account_type": "vpa",
+            "vpa": {"address": vpa},
+            "contact": {"name": name, "type": "customer"},
+        },
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            response = await client.post(
+                "https://api.razorpay.com/v1/fund_accounts/validations",
+                json=payload,
+                auth=_auth(),
+            )
+    except httpx.HTTPError as exc:
+        raise ProviderError("Could not reach the provider.", retryable=True) from exc
+
+    if response.status_code >= 400:
+        raise ProviderError(_error_detail(response))
+
+    return response.json()
 
 
 async def penny_drop(

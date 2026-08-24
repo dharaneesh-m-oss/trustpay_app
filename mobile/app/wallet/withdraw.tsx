@@ -8,6 +8,7 @@ import { Card, Row, Txt } from '@/components/ui';
 import { SlideActionButton } from '@/components/uiverse';
 import { ApiError } from '@/lib/api';
 import { formatMoney } from '@/lib/money';
+import { usePaymentsStatus } from '@/lib/payments';
 import { useWallet, useWithdraw } from '@/lib/queries';
 import { useTheme } from '@/theme';
 
@@ -20,6 +21,8 @@ export default function Withdraw() {
 
   const wallet = useWallet();
   const withdraw = useWithdraw();
+  const payments = usePaymentsStatus();
+  const live = payments.data?.payouts_enabled ?? false;
   const [digits, setDigits] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -34,6 +37,14 @@ export default function Withdraw() {
 
   const submit = async () => {
     setError(null);
+
+    // A real payout needs a destination and a provider. The simulated path
+    // exists only where there is neither.
+    if (live) {
+      router.replace({ pathname: '/wallet/payout', params: { amount } });
+      return;
+    }
+
     try {
       await withdraw.mutateAsync(amount);
       router.back();

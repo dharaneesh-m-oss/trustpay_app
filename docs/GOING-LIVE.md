@@ -98,16 +98,30 @@ is deliberate: absent a secret no signature can be trusted, so none is accepted.
 
 ### Payouts (withdrawals)
 
+Two destinations are supported, and both need the same credentials:
+
+- **Bank account** — account number plus IFSC, settled over IMPS. Verified by a
+  penny drop: a real one-rupee validated transfer that returns the registered
+  account holder's name.
+- **UPI ID** — a VPA from BHIM, GPay, PhonePe or a bank's own app, settled over
+  UPI in seconds. Verified by a directory lookup, which costs a fraction of a
+  penny drop because no money moves.
+
+There is no separate "BHIM integration" to add. BHIM is one UPI client among
+many; a UPI ID created in it is the same address as one created anywhere else,
+and the provider is what makes paying to it possible.
+
 Payouts need **RazorpayX** on top of the above, with its own activation:
 
 ```bash
 RAZORPAY_PAYOUT_ACCOUNT=<your RazorpayX virtual account number>
 ```
 
-Until this is set, a bank account can be added but stays `PENDING` and cannot
-receive a payout. Verifying ownership needs a real one-rupee validated
-transfer — a penny drop — which costs money and needs the payout product. An
-account cannot be honestly called "verified" without it.
+Until this is set, a bank account or UPI ID can be added but stays `PENDING`
+and cannot receive a payout. Establishing ownership needs the provider — a penny
+drop for a bank account, a directory lookup for a UPI ID — and neither can be
+done from our side. An account cannot be honestly called "verified" without one,
+so it is not.
 
 ---
 

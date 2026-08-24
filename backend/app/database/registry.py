@@ -16,7 +16,12 @@ from app.disputes.model import Dispute, DisputeMessage
 from app.ledger.model import LedgerAccount, LedgerPosting, LedgerTransaction
 from app.milestones.model import Milestone, MilestoneSubmission
 from app.notifications.model import Notification
-from app.payments.model import BankAccount, PaymentIntent, PayoutRequest
+from app.payments.model import (
+    BankAccount,
+    PaymentIntent,
+    PayoutRequest,
+    UpiAccount,
+)
 from app.projects.model import Project, ProjectMember
 from app.users.model import User
 from app.wallet.model import Wallet
@@ -37,6 +42,7 @@ __all__ = [
     "Notification",
     "PaymentIntent",
     "PayoutRequest",
+    "UpiAccount",
     "OtpVerification",
     "Project",
     "ProjectMember",

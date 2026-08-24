@@ -100,6 +100,8 @@ function RootNavigator() {
         />
         <Stack.Screen name="wallet/cards" />
         <Stack.Screen name="wallet/bank-accounts" />
+        <Stack.Screen name="wallet/upi-accounts" />
+        <Stack.Screen name="wallet/payout" />
         <Stack.Screen name="wallet/upi-top-up" />
         <Stack.Screen name="project/create" />
         <Stack.Screen name="cancellation/[id]" />

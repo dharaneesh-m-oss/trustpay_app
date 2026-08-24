@@ -99,6 +99,32 @@ export default function WalletScreen() {
 
           <Card>
             <Txt variant="captionStrong" tone="secondary">
+              Where withdrawals go
+            </Txt>
+            <Txt variant="caption" tone="secondary" style={{ marginTop: spacing.xs }}>
+              Add a bank account or a UPI ID once, and withdrawals go straight to
+              it.
+            </Txt>
+            <Row gap={spacing.sm} style={{ marginTop: spacing.lg }}>
+              <Button
+                title="Bank accounts"
+                variant="secondary"
+                fullWidth={false}
+                style={{ flex: 1 }}
+                onPress={() => router.push('/wallet/bank-accounts')}
+              />
+              <Button
+                title="UPI IDs"
+                variant="secondary"
+                fullWidth={false}
+                style={{ flex: 1 }}
+                onPress={() => router.push('/wallet/upi-accounts')}
+              />
+            </Row>
+          </Card>
+
+          <Card>
+            <Txt variant="captionStrong" tone="secondary">
               Why the three are separate
             </Txt>
             <Txt variant="caption" tone="secondary" style={{ marginTop: spacing.xs }}>

@@ -233,3 +233,37 @@ def test_transaction_references_are_alphanumeric_and_bounded():
     assert reference.isalnum()
     assert len(reference) <= 35
     assert reference.isupper()
+
+
+# --------------------------------------------------------------- UPI payouts
+
+def test_a_payout_must_name_exactly_one_destination():
+    """Neither is a payout to nowhere; both makes the destination depend on
+    which column the code happens to read first."""
+    import uuid
+
+    import pytest as _pytest
+    from pydantic import ValidationError
+
+    from app.payments.schema import PayoutRequestBody
+
+    bank = uuid.uuid4()
+    upi = uuid.uuid4()
+
+    assert PayoutRequestBody(amount=500, bank_account_id=bank).bank_account_id == bank
+    assert PayoutRequestBody(amount=500, upi_account_id=upi).upi_account_id == upi
+
+    with _pytest.raises(ValidationError):
+        PayoutRequestBody(amount=500)
+
+    with _pytest.raises(ValidationError):
+        PayoutRequestBody(amount=500, bank_account_id=bank, upi_account_id=upi)
+
+
+def test_upi_ids_are_lowercased_on_the_way_in():
+    """VPAs are case-insensitive, so storing two casings as two accounts would
+    let the same destination be added twice."""
+    from app.payments.schema import UpiAccountCreateRequest
+
+    payload = UpiAccountCreateRequest(vpa="  Someone@OkHdfcBank ", holder_name="Priya Sharma")
+    assert payload.vpa == "someone@okhdfcbank"

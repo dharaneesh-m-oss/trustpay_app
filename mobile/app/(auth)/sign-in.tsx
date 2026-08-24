@@ -1,15 +1,18 @@
 /**
  * Sign in.
  *
- * Built around the gradient login button (SmookyDev/sharp-stingray-58), which
- * carries two labels — the original swapped them on hover; here the small one
- * sits above the action, since a phone has no hover to swap on.
+ * Same surface as the rest of the app: pale ground, one white card, graphite
+ * text. The old full-bleed indigo hero was a second design language living on
+ * the first screen anyone sees, which made this feel like two different apps
+ * stitched together.
  *
- * The layout is a gradient hero with the form on a card that overlaps it. That
- * overlap is what stops the screen reading as a generic centred form.
+ * The gradient survives in exactly one place — the sign-in button itself
+ * (SmookyDev/sharp-stingray-58), which keeps its two labels; the original
+ * swapped them on hover, and a phone has no hover to swap on. On a page this
+ * quiet, one saturated element reads as *the* action, which is what that button
+ * is.
  */
 
-import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -19,28 +22,35 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { LogoMark } from '@/components/Logo';
+import { Chip, SoftCard } from '@/components/soft';
 import { Button, Row, Txt } from '@/components/ui';
 import { GradientButton } from '@/components/uiverse';
-import { ApiError } from '@/lib/api';
-import { useAuth } from '@/store/auth';
-import { available as googleAvailable, errorFrom, idTokenFrom, useGoogleAuth } from '@/lib/google';
-import { getMode } from '@/lib/api';
+import { ApiError, getMode } from '@/lib/api';
+import {
+  available as googleAvailable,
+  errorFrom,
+  idTokenFrom,
+  useGoogleAuth,
+} from '@/lib/google';
 import { DEMO_EMAIL, DEMO_PASSWORD } from '@/local/engine';
-import { gradients, glow, useTheme } from '@/theme';
+import { useAuth } from '@/store/auth';
+import { useTheme } from '@/theme';
 
 export default function SignIn() {
   const router = useRouter();
-  const { colors, spacing, radius, typography } = useTheme();
+  const { colors, spacing, radius, typography, elevation } = useTheme();
   const insets = useSafeAreaInsets();
+
   const signIn = useAuth((state) => state.signIn);
   const signInWithGoogle = useAuth((state) => state.signInWithGoogle);
   const google = useGoogleAuth();
+
   // Google sign-in needs the real server to verify the token, so it is only
-  // offered in live mode - in demo there is nothing to verify against.
+  // offered in live mode — in demo there is nothing to verify against.
   const canUseGoogle = googleAvailable() && getMode() === 'live';
 
   const [email, setEmail] = useState('');
@@ -101,7 +111,7 @@ export default function SignIn() {
     options: Partial<React.ComponentProps<typeof TextInput>> & { key: string },
   ) => (
     <View style={{ gap: spacing.xs }}>
-      <Txt variant="overline" tone="secondary">
+      <Txt variant="caption" tone="tertiary">
         {label}
       </Txt>
       <TextInput
@@ -114,12 +124,11 @@ export default function SignIn() {
           ...typography.body,
           minHeight: 54,
           borderRadius: radius.lg,
-          borderWidth: 2,
+          borderWidth: 1.5,
           borderColor: focused === options.key ? colors.brand : colors.border,
-          backgroundColor: colors.surface,
+          backgroundColor: colors.surfaceMuted,
           color: colors.textPrimary,
           paddingHorizontal: spacing.lg,
-          ...(focused === options.key ? glow(colors.brand, 0.22, 12) : null),
         }}
         {...options}
       />
@@ -132,185 +141,168 @@ export default function SignIn() {
       style={{ flex: 1, backgroundColor: colors.background }}
     >
       <ScrollView
-        contentContainerStyle={{ flexGrow: 1, paddingBottom: spacing.huge }}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingTop: insets.top + spacing.xxxl,
+          paddingHorizontal: spacing.lg,
+          paddingBottom: spacing.huge,
+        }}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Hero */}
-        <LinearGradient
-          colors={gradients.wallet as unknown as [string, string, ...string[]]}
-          start={{ x: 0, y: 0 }}
-          end={{ x: 1, y: 1 }}
-          style={{
-            paddingTop: insets.top + spacing.xxl,
-            paddingHorizontal: spacing.xl,
-            paddingBottom: spacing.huge + spacing.xxl,
-            borderBottomLeftRadius: 40,
-            borderBottomRightRadius: 40,
-          }}
+        {/* ---------------------------------------------------------- mark */}
+        <Animated.View
+          entering={FadeInDown.duration(360)}
+          style={{ alignItems: 'center', gap: spacing.lg }}
         >
-          <Animated.View entering={FadeInDown.duration(400)}>
-            <Row gap={spacing.sm}>
-              <View
-                style={{
-                  width: 44,
-                  height: 44,
-                  borderRadius: radius.lg,
-                  backgroundColor: 'rgba(255,255,255,0.2)',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-              >
-                <LogoMark size={26} color="#FFFFFF" accent="rgba(255,255,255,0.7)" />
-              </View>
-              <Txt variant="h2" style={{ color: '#FFFFFF', letterSpacing: 1 }}>
-                TrustPay
-              </Txt>
-            </Row>
+          <View
+            style={[
+              {
+                width: 68,
+                height: 68,
+                borderRadius: 24,
+                backgroundColor: colors.brand,
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
+              elevation.md,
+            ]}
+          >
+            <LogoMark size={34} color="#FFFFFF" accent="rgba(255,255,255,0.6)" />
+          </View>
 
+          <View style={{ alignItems: 'center', gap: spacing.xs }}>
+            <Txt variant="h1">Welcome back</Txt>
             <Txt
-              variant="display"
-              style={{ color: '#FFFFFF', marginTop: spacing.xxl, fontSize: 32 }}
-            >
-              Welcome back.
-            </Txt>
-            <Txt
-              variant="body"
-              style={{ color: 'rgba(255,255,255,0.78)', marginTop: spacing.xs }}
+              variant="caption"
+              tone="secondary"
+              style={{ textAlign: 'center', maxWidth: 280 }}
             >
               Sign in to see your projects and protected funds.
             </Txt>
-          </Animated.View>
-        </LinearGradient>
+          </View>
 
-        {/* Form card, overlapping the hero */}
+          <Chip label={getMode() === 'live' ? 'trustpay' : 'demo mode'} />
+        </Animated.View>
+
+        {/* ---------------------------------------------------------- form */}
         <Animated.View
-          entering={FadeInUp.delay(120).duration(420)}
-          style={{
-            marginTop: -spacing.huge,
-            marginHorizontal: spacing.lg,
-            backgroundColor: colors.surface,
-            borderRadius: radius.xxl,
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: spacing.xl,
-            gap: spacing.lg,
-            shadowColor: '#15171D',
-            shadowOpacity: 0.12,
-            shadowRadius: 26,
-            shadowOffset: { width: 0, height: 12 },
-            elevation: 8,
-          }}
+          entering={FadeInDown.delay(90).duration(400)}
+          style={{ marginTop: spacing.xxxl }}
         >
-          {field('Email', email, setEmail, {
-            key: 'email',
-            placeholder: 'you@example.com',
-            autoCapitalize: 'none',
-            autoComplete: 'email',
-            keyboardType: 'email-address',
-            textContentType: 'emailAddress',
-          })}
+          <SoftCard>
+            <View style={{ gap: spacing.lg }}>
+              {field('Email', email, setEmail, {
+                key: 'email',
+                placeholder: 'you@example.com',
+                autoCapitalize: 'none',
+                autoComplete: 'email',
+                keyboardType: 'email-address',
+                autoCorrect: false,
+              })}
 
-          {field('Password', password, setPassword, {
-            key: 'password',
-            placeholder: 'Your password',
-            secureTextEntry: true,
-            autoComplete: 'current-password',
-            textContentType: 'password',
-            returnKeyType: 'go',
-            onSubmitEditing: submit,
-          })}
+              {field('Password', password, setPassword, {
+                key: 'password',
+                placeholder: '••••••••',
+                secureTextEntry: true,
+                autoCapitalize: 'none',
+                autoComplete: 'password',
+              })}
 
-          {error ? (
-            <View
-              style={{
-                backgroundColor: colors.dangerMuted,
-                borderRadius: radius.md,
-                borderLeftWidth: 3,
-                borderLeftColor: colors.danger,
-                padding: spacing.md,
-              }}
-            >
-              <Txt variant="caption" tone="danger">
-                {error}
-              </Txt>
-            </View>
-          ) : null}
+              {error ? (
+                <View
+                  style={{
+                    backgroundColor: colors.dangerMuted,
+                    borderRadius: radius.md,
+                    borderLeftWidth: 3,
+                    borderLeftColor: colors.danger,
+                    padding: spacing.md,
+                  }}
+                >
+                  <Txt variant="caption" tone="danger">
+                    {error}
+                  </Txt>
+                </View>
+              ) : null}
 
-          {/* The login button */}
-          <GradientButton
-            title="Sign in"
-            subtitle="Welcome back"
-            onPress={submit}
-            loading={busy}
-            disabled={!email || !password}
-          />
-
-          {canUseGoogle ? (
-            <>
-              <Row
-                gap={spacing.md}
-                style={{ alignItems: 'center', marginTop: spacing.xl }}
-              >
-                <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-                <Txt variant="caption" tone="tertiary">
-                  or
-                </Txt>
-                <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
-              </Row>
-
-              <Button
-                title="Continue with Google"
-                variant="secondary"
-                disabled={!google.request || busy}
-                onPress={() => {
-                  setError(null);
-                  google.promptAsync();
-                }}
-                style={{ marginTop: spacing.lg }}
+              <GradientButton
+                title="Sign in"
+                subtitle="Welcome back"
+                onPress={submit}
+                loading={busy}
+                disabled={!email || !password}
               />
-            </>
-          ) : null}
 
-          <Txt
-            variant="captionStrong"
-            tone="brand"
-            accessibilityRole="button"
-            style={{ textAlign: 'center', marginTop: spacing.lg }}
-            onPress={() => enter(DEMO_EMAIL, DEMO_PASSWORD)}
-          >
-            Open the demo account
-          </Txt>
+              {canUseGoogle ? (
+                <>
+                  <Row gap={spacing.md} style={{ alignItems: 'center' }}>
+                    <View
+                      style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+                    />
+                    <Txt variant="caption" tone="tertiary">
+                      or
+                    </Txt>
+                    <View
+                      style={{ flex: 1, height: 1, backgroundColor: colors.border }}
+                    />
+                  </Row>
+
+                  <Button
+                    title="Continue with Google"
+                    variant="secondary"
+                    disabled={!google.request || busy}
+                    onPress={() => {
+                      setError(null);
+                      google.promptAsync();
+                    }}
+                  />
+                </>
+              ) : null}
+            </View>
+          </SoftCard>
+        </Animated.View>
+
+        {/* -------------------------------------------------------- footer */}
+        <Animated.View
+          entering={FadeInDown.delay(180).duration(400)}
+          style={{ marginTop: spacing.xxl, gap: spacing.lg }}
+        >
+          <Row style={{ justifyContent: 'center' }} gap={spacing.xs}>
+            <Txt variant="caption" tone="secondary">
+              New to TrustPay?
+            </Txt>
+            <Txt
+              variant="captionStrong"
+              tone="brand"
+              accessibilityRole="button"
+              onPress={() => router.push('/(auth)/sign-up')}
+            >
+              Create an account
+            </Txt>
+          </Row>
+
+          <SoftCard depth="sm" onPress={() => enter(DEMO_EMAIL, DEMO_PASSWORD)}>
+            <Row style={{ justifyContent: 'space-between' }}>
+              <View style={{ flex: 1, paddingRight: spacing.md }}>
+                <Txt variant="bodyStrong">Open the demo account</Txt>
+                <Txt variant="caption" tone="secondary">
+                  A sample project, already part-finished.
+                </Txt>
+              </View>
+              <Txt variant="body" tone="secondary">
+                →
+              </Txt>
+            </Row>
+          </SoftCard>
+
           <Txt
             variant="caption"
             tone="tertiary"
-            style={{ textAlign: 'center', marginTop: spacing.xs }}
+            style={{ textAlign: 'center', paddingHorizontal: spacing.xl }}
           >
-            Comes with a sample project already part-finished.
+            TrustPay is not a bank. Funds shown in demo mode are simulated.
           </Txt>
         </Animated.View>
-
-        <Row style={{ justifyContent: 'center', marginTop: spacing.xxl }} gap={spacing.xs}>
-          <Txt variant="caption" tone="secondary">
-            New to TrustPay?
-          </Txt>
-          <Txt
-            variant="captionStrong"
-            tone="brand"
-            accessibilityRole="button"
-            onPress={() => router.push('/(auth)/sign-up')}
-          >
-            Create an account
-          </Txt>
-        </Row>
-
-        <Txt
-          variant="caption"
-          tone="tertiary"
-          style={{ textAlign: 'center', marginTop: spacing.md, paddingHorizontal: spacing.xxl }}
-        >
-          TrustPay is not a bank. Funds shown in demo mode are simulated.
-        </Txt>
       </ScrollView>
     </KeyboardAvoidingView>
   );

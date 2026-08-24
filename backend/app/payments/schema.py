@@ -10,9 +10,9 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from app.payments.model import BankAccount, PayoutRequest
+from app.payments.model import BankAccount, PayoutRequest, UpiAccount
 
 
 class PaymentsStatusResponse(BaseModel):
@@ -87,6 +87,46 @@ class BankAccountResponse(BaseModel):
         )
 
 
+class UpiAccountCreateRequest(BaseModel):
+    vpa: str = Field(min_length=4, max_length=120)
+    holder_name: str = Field(min_length=2, max_length=120)
+
+    @field_validator("vpa")
+    @classmethod
+    def _lower(cls, value: str) -> str:
+        return value.strip().lower()
+
+
+class UpiAccountResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    vpa: str
+    holder_name: str
+    status: str
+    is_default: bool
+    verified_at: datetime | None
+    failure_reason: str | None
+    name_match_score: float | None
+
+    @classmethod
+    def from_model(cls, account: UpiAccount) -> UpiAccountResponse:
+        return cls(
+            id=account.id,
+            vpa=account.vpa,
+            holder_name=account.holder_name,
+            status=account.status.value,
+            is_default=account.is_default,
+            verified_at=account.verified_at,
+            failure_reason=account.failure_reason,
+            name_match_score=(
+                float(account.name_match_score)
+                if account.name_match_score is not None
+                else None
+            ),
+        )
+
+
 class TopUpStartRequest(BaseModel):
     amount: Decimal = Field(gt=0, le=Decimal("200000"))
 
@@ -121,8 +161,19 @@ class PaymentIntentStatusResponse(BaseModel):
 
 
 class PayoutRequestBody(BaseModel):
+    """Exactly one destination, enforced here as well as in the database."""
+
     amount: Decimal = Field(gt=0)
-    bank_account_id: uuid.UUID
+    bank_account_id: uuid.UUID | None = None
+    upi_account_id: uuid.UUID | None = None
+
+    @model_validator(mode="after")
+    def _one_destination(self) -> PayoutRequestBody:
+        if bool(self.bank_account_id) == bool(self.upi_account_id):
+            raise ValueError(
+                "Choose exactly one destination: a bank account or a UPI ID."
+            )
+        return self
 
 
 class PayoutResponse(BaseModel):
@@ -133,7 +184,11 @@ class PayoutResponse(BaseModel):
     currency: str
     status: str
     reference: str
-    bank_account_id: uuid.UUID
+    bank_account_id: uuid.UUID | None
+    upi_account_id: uuid.UUID | None
+    destination: str
+    """A short human label, so history does not need a second lookup."""
+
     failure_reason: str | None
     created_at: datetime
     completed_at: datetime | None
@@ -147,6 +202,8 @@ class PayoutResponse(BaseModel):
             status=request.status.value,
             reference=request.reference,
             bank_account_id=request.bank_account_id,
+            upi_account_id=request.upi_account_id,
+            destination="upi" if request.upi_account_id else "bank",
             failure_reason=request.failure_reason,
             created_at=request.created_at,
             completed_at=request.completed_at,

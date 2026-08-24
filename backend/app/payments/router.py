@@ -31,6 +31,8 @@ from app.payments.schema import (
     PayoutRequestBody,
     PayoutResponse,
     TopUpStartRequest,
+    UpiAccountCreateRequest,
+    UpiAccountResponse,
     UpiTargetResponse,
 )
 from app.users.model import User
@@ -128,6 +130,47 @@ async def add_bank_account(
     return BankAccountResponse.from_model(account)
 
 
+@router.get(
+    "/upi-accounts",
+    response_model=list[UpiAccountResponse],
+    summary="UPI IDs on this profile",
+)
+def list_upi_accounts(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+) -> list[UpiAccountResponse]:
+    return [
+        UpiAccountResponse.from_model(account)
+        for account in service.list_upi_accounts(db, user)
+    ]
+
+
+@router.post(
+    "/upi-accounts",
+    response_model=UpiAccountResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Add a UPI ID for withdrawals",
+)
+async def add_upi_account(
+    payload: UpiAccountCreateRequest,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    context: RequestContext = Depends(get_request_context),
+) -> UpiAccountResponse:
+    try:
+        account = await service.add_upi_account(
+            db,
+            user,
+            vpa=payload.vpa,
+            holder_name=payload.holder_name,
+            context=context,
+        )
+    except verification.VerificationError as exc:
+        raise VerificationFailedError(exc.message) from exc
+
+    return UpiAccountResponse.from_model(account)
+
+
 @router.post(
     "/top-up",
     response_model=PaymentIntentResponse,
@@ -209,7 +252,12 @@ async def create_payout(
     context: RequestContext = Depends(get_request_context),
 ) -> PayoutResponse:
     request = await service.request_payout(
-        db, user, payload.amount, payload.bank_account_id, context=context
+        db,
+        user,
+        payload.amount,
+        bank_account_id=payload.bank_account_id,
+        upi_account_id=payload.upi_account_id,
+        context=context,
     )
     return PayoutResponse.from_model(request)
 

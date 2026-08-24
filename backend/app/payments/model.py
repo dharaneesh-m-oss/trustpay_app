@@ -20,6 +20,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from sqlalchemy import (
+    CheckConstraint,
     DateTime,
     Enum,
     ForeignKey,
@@ -122,6 +123,57 @@ class BankAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
 
 
+class UpiAccount(Base, UUIDPrimaryKeyMixin, TimestampMixin):
+    """A saved UPI ID — BHIM, GPay, PhonePe, a bank's own app.
+
+    A second kind of payout destination beside a bank account, and for most
+    people the one they actually know: a VPA is memorable where an account
+    number and IFSC are copied off a passbook.
+
+    The same honesty rule applies as for bank accounts. A well-formed VPA is not
+    a VPA that exists, and a VPA that exists is not one that belongs to this
+    person. Only a provider-side validation establishes either, so an account
+    added without one stays PENDING.
+    """
+
+    __tablename__ = "upi_accounts"
+    __table_args__ = (
+        UniqueConstraint("user_id", "vpa", name="uq_upi_account_per_user"),
+        Index("ix_upi_accounts_vpa", "vpa"),
+    )
+
+    user_id: Mapped[UUID] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+
+    vpa: Mapped[str] = mapped_column(String(120), nullable=False)
+    """Stored whole. Unlike an account number, a VPA is a public handle - it is
+    what people put on a QR code in a shop window - so masking it would be
+    ceremony without benefit."""
+
+    holder_name: Mapped[str] = mapped_column(String(120), nullable=False)
+
+    status: Mapped[BankAccountStatus] = mapped_column(
+        _pg_enum(BankAccountStatus, "bank_account_status"),
+        nullable=False,
+        default=BankAccountStatus.PENDING,
+    )
+    """Shares the bank-account status enum: the states and their meanings are
+    identical, and a second enum saying the same thing would drift."""
+
+    name_match_score: Mapped[Decimal | None] = mapped_column(
+        Numeric(4, 3), nullable=True
+    )
+    verified_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    failure_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provider_fund_account_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True
+    )
+    is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
+
+
 class PaymentIntent(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     """An attempt to put money in. Not a balance until the provider confirms."""
 
@@ -169,13 +221,23 @@ class PayoutRequest(Base, UUIDPrimaryKeyMixin, TimestampMixin):
     __table_args__ = (
         UniqueConstraint("reference", name="uq_payout_reference"),
         Index("ix_payout_requests_provider", "provider_payout_id"),
+        # Exactly one destination. Neither would be a payout to nowhere; both
+        # would be a payout whose destination depends on which column the code
+        # happened to read.
+        CheckConstraint(
+            "(bank_account_id IS NULL) <> (upi_account_id IS NULL)",
+            name="ck_payout_one_destination",
+        ),
     )
 
     user_id: Mapped[UUID] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    bank_account_id: Mapped[UUID] = mapped_column(
-        ForeignKey("bank_accounts.id", ondelete="RESTRICT"), nullable=False
+    bank_account_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("bank_accounts.id", ondelete="RESTRICT"), nullable=True
+    )
+    upi_account_id: Mapped[UUID | None] = mapped_column(
+        ForeignKey("upi_accounts.id", ondelete="RESTRICT"), nullable=True
     )
 
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), nullable=False)

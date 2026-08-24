@@ -45,6 +45,7 @@ from app.payments.exceptions import (
 from app.payments.model import (
     BankAccount,
     BankAccountStatus,
+    UpiAccount,
     PaymentIntent,
     PaymentIntentStatus,
     PayoutRequest,
@@ -236,6 +237,119 @@ def list_bank_accounts(db: Session, user: User) -> list[BankAccount]:
     )
 
 
+# -------------------------------------------------------------- upi accounts
+
+async def add_upi_account(
+    db: Session,
+    user: User,
+    *,
+    vpa: str,
+    holder_name: str,
+    context: RequestContext | None = None,
+) -> UpiAccount:
+    """Save a UPI ID as a payout destination.
+
+    The same three checks as a bank account, and the same refusal to overstate
+    what they prove: format offline, existence and ownership only from the
+    provider. A VPA that merely parses is not one that anybody can be paid at.
+    """
+    context = context or RequestContext()
+
+    address = verification.normalise_vpa(vpa)
+
+    match = verification.match_names(user.full_name, holder_name)
+    if not match.matched:
+        raise AccountNotVerifiedError(match.reason)
+
+    existing = db.scalar(
+        select(UpiAccount).where(
+            UpiAccount.user_id == user.id, UpiAccount.vpa == address
+        )
+    )
+    if existing is not None:
+        raise DuplicateBankAccountError()
+
+    account = UpiAccount(
+        user_id=user.id,
+        vpa=address,
+        holder_name=holder_name.strip(),
+        name_match_score=Decimal(str(match.score)),
+        status=BankAccountStatus.PENDING,
+    )
+
+    if provider.payouts_configured():
+        try:
+            result = await provider.validate_vpa(vpa=address, name=holder_name)
+            registered = (
+                result.get("results", {}).get("registered_name")
+                or result.get("vpa", {}).get("username")
+                or ""
+            )
+            # A provider that confirms the VPA exists but returns no name still
+            # tells us something worth keeping: the address is payable. It is
+            # not evidence of ownership, so it does not become VERIFIED.
+            if not registered:
+                account.status = BankAccountStatus.PENDING
+                account.failure_reason = (
+                    "The UPI ID exists but your bank did not return a name for "
+                    "it, so ownership could not be confirmed."
+                )
+            else:
+                bank_match = verification.match_names(user.full_name, registered)
+                if bank_match.matched:
+                    account.status = BankAccountStatus.VERIFIED
+                    account.verified_at = _now()
+                    account.name_match_score = Decimal(str(bank_match.score))
+                    account.provider_fund_account_id = result.get(
+                        "fund_account", {}
+                    ).get("id")
+                else:
+                    account.status = BankAccountStatus.REJECTED
+                    account.failure_reason = (
+                        f"That UPI ID belongs to '{registered}', which is not you."
+                    )
+        except provider.ProviderError as exc:
+            account.status = BankAccountStatus.PENDING
+            account.failure_reason = exc.message
+
+    if not db.scalar(
+        select(UpiAccount).where(
+            UpiAccount.user_id == user.id, UpiAccount.is_default.is_(True)
+        )
+    ):
+        account.is_default = True
+
+    db.add(account)
+
+    audit.record(
+        db,
+        action=(
+            AuditAction.BANK_ACCOUNT_VERIFIED
+            if account.status is BankAccountStatus.VERIFIED
+            else AuditAction.BANK_ACCOUNT_ADDED
+        ),
+        actor_user_id=user.id,
+        entity_type="upi_account",
+        entity_id=account.id,
+        context={"vpa": address, "status": account.status.value},
+        ip_address=context.ip_address,
+        user_agent=context.user_agent,
+    )
+    db.commit()
+    db.refresh(account)
+    return account
+
+
+def list_upi_accounts(db: Session, user: User) -> list[UpiAccount]:
+    return list(
+        db.scalars(
+            select(UpiAccount)
+            .where(UpiAccount.user_id == user.id)
+            .order_by(UpiAccount.is_default.desc(), UpiAccount.created_at.desc())
+        )
+    )
+
+
 # ------------------------------------------------------------- money coming in
 
 async def start_top_up(
@@ -383,8 +497,9 @@ async def request_payout(
     db: Session,
     user: User,
     amount: Decimal,
-    bank_account_id,
     *,
+    bank_account_id=None,
+    upi_account_id=None,
     context: RequestContext | None = None,
 ) -> PayoutRequest:
     """Withdraw to a verified bank account.
@@ -404,11 +519,26 @@ async def request_payout(
             f"The smallest withdrawal is {settings.MIN_PAYOUT_AMOUNT}."
         )
 
-    account = db.scalar(
-        select(BankAccount).where(
-            BankAccount.id == bank_account_id, BankAccount.user_id == user.id
+    # Exactly one destination, matching the table's own constraint. Accepting
+    # both and picking one would make the destination depend on read order.
+    if bool(bank_account_id) == bool(upi_account_id):
+        raise PayoutTooSmallError(
+            "Choose exactly one destination: a bank account or a UPI ID."
         )
-    )
+
+    if bank_account_id:
+        account = db.scalar(
+            select(BankAccount).where(
+                BankAccount.id == bank_account_id, BankAccount.user_id == user.id
+            )
+        )
+    else:
+        account = db.scalar(
+            select(UpiAccount).where(
+                UpiAccount.id == upi_account_id, UpiAccount.user_id == user.id
+            )
+        )
+
     if account is None:
         raise BankAccountNotFoundError()
     if account.status is not BankAccountStatus.VERIFIED:
@@ -416,6 +546,8 @@ async def request_payout(
             account.failure_reason
             or "This account has not been verified yet, so it cannot receive a payout."
         )
+
+    to_upi = isinstance(account, UpiAccount)
 
     today = _now().date()
     spent_today = sum(
@@ -435,7 +567,8 @@ async def request_payout(
 
     request = PayoutRequest(
         user_id=user.id,
-        bank_account_id=account.id,
+        bank_account_id=None if to_upi else account.id,
+        upi_account_id=account.id if to_upi else None,
         amount=amount,
         currency=settings.DEFAULT_CURRENCY,
         status=PayoutStatus.REQUESTED,
@@ -451,19 +584,31 @@ async def request_payout(
         user,
         amount,
         idempotency_key=f"payout-{request.id}",
-        description=f"Withdrawal to {account.bank_name} {account.account_last4}",
+        description=(
+            f"Withdrawal to {account.vpa}"
+            if to_upi
+            else f"Withdrawal to {account.bank_name} {account.account_last4}"
+        ),
     )
     request.ledger_transaction_id = transaction.id
     db.commit()
 
     try:
-        result = await provider.create_payout(
-            amount=amount,
-            account_number=_decrypt_account(account.account_encrypted),
-            ifsc=account.ifsc,
-            beneficiary_name=account.holder_name,
-            reference=request.reference,
-        )
+        if to_upi:
+            result = await provider.create_upi_payout(
+                amount=amount,
+                vpa=account.vpa,
+                beneficiary_name=account.holder_name,
+                reference=request.reference,
+            )
+        else:
+            result = await provider.create_payout(
+                amount=amount,
+                account_number=_decrypt_account(account.account_encrypted),
+                ifsc=account.ifsc,
+                beneficiary_name=account.holder_name,
+                reference=request.reference,
+            )
         request.provider_payout_id = result.payout_id
         request.status = PayoutStatus.PROCESSING
         request.provider_payload = result.raw
