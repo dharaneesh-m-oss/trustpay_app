@@ -199,104 +199,108 @@ function vFlow(slide, items, opts) {
   s.addNotes('This is the insight the whole product comes from. Pause here.');
 }
 
-/* ------------------------------------------------------------------ 03 gap */
+/* ------------------------------------------------- 03 the gap and the layer */
 
 {
-  const s = darkSlide('The gap');
-  title(s, "Normal payments don't understand the work.", true);
+  const s = lightSlide('The gap');
+  title(s, 'A transfer moves money. It carries none of the conditions.', false, 0.85, 32);
 
-  vFlow(s, [{ t: 'CLIENT' }, { t: 'PAYMENT' }, { t: 'RECEIVER' }], {
-    x: M, y: 2.6, w: 3.4, dark: true, gap: 0.85, size: 15,
+  const colW = 1.52;
+  const pitch = colW + 0.13;
+  const span = 7 * colW + 6 * 0.13; // both chains share this width
+
+  /** One node in a chain: label with a hairline under it. */
+  function node(text, x, y, strong) {
+    s.addText(text, {
+      x, y, w: colW, h: 0.62,
+      fontFace: F, fontSize: 11.5, bold: true,
+      color: strong ? INK : DIM_L,
+      align: 'center', valign: 'middle', margin: 0, charSpacing: 0.4,
+    });
+    return y + 0.66;
+  }
+
+  /* --- today: three nodes across the same width, so the gaps show ------- */
+
+  s.addText('TODAY', {
+    x: M, y: 2.2, w: 3, h: 0.28,
+    fontFace: F, fontSize: 10, bold: true, color: DIM_L, charSpacing: 2, margin: 0,
   });
+
+  [['CLIENT', 0], ['PAYMENT', 3], ['RECEIVER', 6]].forEach(([t, col], i) => {
+    const x = M + col * pitch;
+    node(t, x, 2.6, false);
+    s.addShape(pres.ShapeType.line, {
+      x, y: 3.26, w: colW, h: 0, line: { color: RULE_L, width: 1 },
+    });
+    if (i < 2) {
+      s.addShape(pres.ShapeType.line, {
+        x: x + colW + 0.06, y: 2.9, w: pitch * 3 - colW - 0.18, h: 0,
+        line: { color: RULE_L, width: 1, endArrowType: 'triangle' },
+      });
+    }
+  });
+
+  s.addText(
+    'No milestone   ·   no completion condition   ·   no protected workflow   ·   ' +
+    'no structured approval   ·   no cancellation mechanism',
+    {
+      x: M, y: 3.42, w: span, h: 0.34,
+      fontFace: F, fontSize: 11.5, color: DIM_L, margin: 0,
+    },
+  );
 
   s.addShape(pres.ShapeType.line, {
-    x: 5.6, y: 2.5, w: 0, h: 3.1, line: { color: RULE_D, width: 0.75 },
+    x: M, y: 4.05, w: span, h: 0, line: { color: RULE_L, width: 0.75 },
   });
 
-  s.addText('What the transfer never carries', {
-    x: 6.3, y: 2.5, w: 6, h: 0.3,
-    fontFace: F, fontSize: 11, bold: true, color: DIM_D, charSpacing: 1.5, margin: 0,
+  /* --- with TrustPay: the same width, filled ---------------------------- */
+
+  s.addText('WITH TRUSTPAY', {
+    x: M, y: 4.28, w: 3.5, h: 0.28,
+    fontFace: F, fontSize: 10, bold: true, color: INK, charSpacing: 2, margin: 0,
   });
-
-  const missing = [
-    'No milestone',
-    'No completion condition',
-    'No protected workflow',
-    'No structured approval',
-    'No clear cancellation mechanism',
-  ];
-  missing.forEach((m, i) => {
-    s.addText(m, {
-      x: 6.3, y: 3.05 + i * 0.52, w: 6, h: 0.38,
-      fontFace: F, fontSize: 16, color: PAPER, margin: 0,
-    });
-    s.addShape(pres.ShapeType.line, {
-      x: 6.3, y: 3.5 + i * 0.52, w: 5.4, h: 0,
-      line: { color: RULE_D, width: 0.75 },
-    });
-  });
-  s.addNotes(
-    'A bank transfer is a fact about money. It carries nothing about what the ' +
-    'money was for, so every condition lives outside the system.',
-  );
-}
-
-/* ------------------------------------------------------------- 04 solution */
-
-{
-  const s = lightSlide('The solution');
-  title(s, 'TrustPay adds a trust layer between both sides.', false);
 
   const steps = [
     'CLIENT', 'PROJECT', 'MILESTONES', 'PROTECTED FUNDS',
     'WORK', 'APPROVAL', 'PAYMENT RELEASE',
   ];
-  const x0 = M;
-  const colW = 1.52;
-  const pitch = colW + 0.13;
   const PROTECTED_AT = 3;
 
   steps.forEach((t, i) => {
-    const x = x0 + i * pitch;
-    s.addText(t, {
-      x, y: 2.95, w: colW, h: 0.7,
-      fontFace: F, fontSize: 11.5, bold: true, color: INK,
-      align: 'center', valign: 'middle', margin: 0, charSpacing: 0.4,
-    });
+    const x = M + i * pitch;
+    node(t, x, 4.62, true);
     s.addShape(pres.ShapeType.line, {
-      x, y: 3.72, w: colW, h: 0, line: { color: RULE_L, width: 1 },
+      x, y: 5.28, w: colW, h: 0, line: { color: RULE_L, width: 1 },
     });
     if (i < steps.length - 1) {
       s.addShape(pres.ShapeType.line, {
-        x: x + colW + 0.01, y: 3.3, w: 0.11, h: 0,
+        x: x + colW + 0.01, y: 4.93, w: 0.11, h: 0,
         line: { color: DIM_L, width: 1, endArrowType: 'triangle' },
       });
     }
   });
 
-  // One continuous rule under the protected span, rather than four separate
-  // bars that read as arbitrary emphasis.
-  const spanX = x0 + PROTECTED_AT * pitch;
+  const spanX = M + PROTECTED_AT * pitch;
   const spanW = (steps.length - PROTECTED_AT) * pitch - 0.13;
   s.addShape(pres.ShapeType.line, {
-    x: spanX, y: 3.72, w: spanW, h: 0, line: { color: INK, width: 2 },
+    x: spanX, y: 5.28, w: spanW, h: 0, line: { color: INK, width: 2 },
   });
-
-  // Centred on the PROTECTED FUNDS column itself, not near it.
-  s.addText('The money enters here and stops.', {
-    x: spanX - 0.9, y: 3.92, w: colW + 1.8, h: 0.4,
+  // Centred on the PROTECTED FUNDS column, since "here" points at that node.
+  s.addText('The money enters here and stops until the work is approved.', {
+    x: spanX - 1.65, y: 5.46, w: colW + 3.3, h: 0.34,
     fontFace: F, fontSize: 10.5, color: DIM_L, align: 'center', margin: 0,
   });
 
+  s.addText('Every step is a state the system knows about. The payment cannot skip one.', {
+    x: M, y: 6.15, w: 9.5, h: 0.4,
+    fontFace: F, fontSize: 15, bold: true, color: INK, margin: 0,
+  });
 
-  s.addText(
-    'Every step is a state the system knows about. The payment cannot skip one.',
-    {
-      x: M, y: 5.55, w: 9.5, h: 0.4,
-      fontFace: F, fontSize: 15, color: INK, margin: 0,
-    },
+  s.addNotes(
+    'The two chains are the same width on purpose. The top one is mostly empty ' +
+    'space, and that space is exactly what every condition falls into today.',
   );
-  s.addNotes('This is the product in one line. Money moves along a state machine.');
 }
 
 /* --------------------------------------------------------- 05 how it works */
