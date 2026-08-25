@@ -80,6 +80,20 @@ class Settings(BaseSettings):
     #: When unset, every AI feature falls back to its deterministic analyser and
     #: says so in the response. Nothing breaks without a key.
     ANTHROPIC_API_KEY: str | None = None
+
+    OPENAI_API_KEY: str | None = None
+    OPENAI_MODEL: str = "gpt-4o"
+    """Override if your account has a different model enabled."""
+
+    AI_PROVIDER: Literal["auto", "claude", "openai", "rules"] = "auto"
+    """Which engine answers.
+
+    `auto` prefers Claude and falls back to OpenAI, so setting either key is
+    enough. Naming one pins it, which is what you want when comparing them or
+    when a bill should land on one account. `rules` switches models off entirely
+    without removing the keys.
+    """
+
     AI_ENABLED: bool = True
     AI_MODEL: str = "claude-opus-5"
     #: low | medium | high | xhigh | max — how hard the model thinks.
@@ -89,7 +103,26 @@ class Settings(BaseSettings):
 
     @property
     def ai_configured(self) -> bool:
-        return bool(self.AI_ENABLED and self.ANTHROPIC_API_KEY)
+        return bool(self.AI_ENABLED and (self.ANTHROPIC_API_KEY or self.OPENAI_API_KEY))
+
+    @property
+    def ai_provider(self) -> str:
+        """The engine that will actually answer, given the keys present.
+
+        Returns "rules" when nothing usable is configured, so callers can ask
+        one question instead of re-deriving the precedence in three places.
+        """
+        if not self.AI_ENABLED or self.AI_PROVIDER == "rules":
+            return "rules"
+        if self.AI_PROVIDER == "claude":
+            return "claude" if self.ANTHROPIC_API_KEY else "rules"
+        if self.AI_PROVIDER == "openai":
+            return "openai" if self.OPENAI_API_KEY else "rules"
+        if self.ANTHROPIC_API_KEY:
+            return "claude"
+        if self.OPENAI_API_KEY:
+            return "openai"
+        return "rules"
 
     # ---------- Google Sign-In ----------
     GOOGLE_CLIENT_ID: str | None = None

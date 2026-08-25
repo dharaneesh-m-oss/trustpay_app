@@ -68,3 +68,8 @@ desktop.ini
 dist/*
 !dist/*.apk
 !dist/README.md
+
+# Deck build artefacts
+deck/node_modules/
+deck/*.pdf
+deck/slide-*.jpg

@@ -26,6 +26,7 @@ PyJWT[crypto]==2.13.0             # replaces the unmaintained python-jose
 # Optional at runtime: without ANTHROPIC_API_KEY the AI features fall
 # back to deterministic analysers rather than failing.
 anthropic==1.0.0
+openai==2.9.0                      # second AI provider; see AI_PROVIDER
 scikit-learn==1.9.0
 numpy==2.5.2
 joblib==1.5.3

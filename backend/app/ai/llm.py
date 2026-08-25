@@ -31,6 +31,7 @@ logger = get_logger(__name__)
 
 #: Marks which engine produced a result, so the UI can be honest about it.
 ENGINE_MODEL = "claude"
+ENGINE_OPENAI = "openai"
 ENGINE_RULES = "rules"
 
 
@@ -42,11 +43,151 @@ class LLMResult:
 
 
 class LLMUnavailable(RuntimeError):
-    """No usable Claude client — missing key, missing package, or a failed call."""
+    """No usable model - missing key, missing package, or a failed call."""
 
 
 _client: Any = None
 _client_checked = False
+_openai_client: Any = None
+_openai_checked = False
+
+
+def active_engine() -> str:
+    """Which engine will answer, given the configuration and what is installed."""
+    return settings.ai_provider
+
+
+def _get_openai_client() -> Any:
+    """Build the OpenAI client once, or raise LLMUnavailable.
+
+    Import is deferred for the same reason as the Anthropic one: the app must
+    start on a machine without the SDK, with AI degrading rather than the
+    process failing.
+    """
+    global _openai_client, _openai_checked
+
+    if _openai_client is not None:
+        return _openai_client
+    if _openai_checked:
+        raise LLMUnavailable("OpenAI client is not configured.")
+
+    _openai_checked = True
+
+    if not settings.AI_ENABLED:
+        raise LLMUnavailable("AI is disabled by configuration.")
+    if not settings.OPENAI_API_KEY:
+        raise LLMUnavailable("OPENAI_API_KEY is not set.")
+
+    try:
+        import openai
+    except ImportError as exc:  # pragma: no cover - depends on the environment
+        raise LLMUnavailable("The openai package is not installed.") from exc
+
+    _openai_client = openai.OpenAI(
+        api_key=settings.OPENAI_API_KEY,
+        timeout=settings.AI_TIMEOUT_SECONDS,
+        max_retries=1,
+    )
+    return _openai_client
+
+
+def _openai_json(
+    *, system: str, prompt: str, schema: dict[str, Any], max_tokens: int
+) -> LLMResult:
+    """One JSON object from OpenAI, constrained by the same schema.
+
+    Structured outputs are used rather than asking politely for JSON: the model
+    is constrained during generation, so the result is valid JSON of the right
+    shape instead of prose that has to be salvaged. That matters because the
+    caller's fallback is a rules engine, and a parse failure would silently
+    downgrade an answer that was actually fine.
+    """
+    client = _get_openai_client()
+
+    try:
+        response = client.chat.completions.create(
+            model=settings.OPENAI_MODEL,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+            response_format={
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "trustpay_result",
+                    "schema": schema,
+                    # Not strict: strict mode requires every property to be
+                    # required and additionalProperties false throughout, which
+                    # these schemas deliberately are not.
+                    "strict": False,
+                },
+            },
+        )
+    except Exception as exc:  # noqa: BLE001 - any failure falls back to rules
+        logger.warning(
+            "llm_call_failed",
+            engine="openai",
+            error=type(exc).__name__,
+            detail=str(exc)[:200],
+        )
+        raise LLMUnavailable(str(exc)) from exc
+
+    choice = response.choices[0]
+    if getattr(choice.message, "refusal", None):
+        # A decline on a payments question is not something to paper over.
+        logger.info("llm_refused", engine="openai")
+        raise LLMUnavailable("The model declined this request.")
+
+    text = choice.message.content or ""
+    if not text:
+        raise LLMUnavailable("The model returned no content.")
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as exc:
+        raise LLMUnavailable("The model returned unparseable JSON.") from exc
+
+    usage = getattr(response, "usage", None)
+    logger.info(
+        "llm_call_succeeded",
+        engine="openai",
+        model=settings.OPENAI_MODEL,
+        input_tokens=getattr(usage, "prompt_tokens", 0),
+        output_tokens=getattr(usage, "completion_tokens", 0),
+    )
+    return LLMResult(data=data, engine=ENGINE_OPENAI, model=settings.OPENAI_MODEL)
+
+
+def _openai_text(*, system: str, prompt: str, max_tokens: int) -> str:
+    client = _get_openai_client()
+
+    try:
+        response = client.chat.completions.create(
+            model=settings.OPENAI_MODEL,
+            max_tokens=max_tokens,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": prompt},
+            ],
+        )
+    except Exception as exc:  # noqa: BLE001
+        logger.warning(
+            "llm_call_failed",
+            engine="openai",
+            error=type(exc).__name__,
+            detail=str(exc)[:200],
+        )
+        raise LLMUnavailable(str(exc)) from exc
+
+    choice = response.choices[0]
+    if getattr(choice.message, "refusal", None):
+        raise LLMUnavailable("The model declined this request.")
+
+    text = (choice.message.content or "").strip()
+    if not text:
+        raise LLMUnavailable("The model returned no content.")
+    return text
 
 
 def _get_client() -> Any:
@@ -84,9 +225,12 @@ def _get_client() -> Any:
 
 
 def is_available() -> bool:
-    """Whether a Claude-backed answer can be attempted at all."""
+    """Whether a model-backed answer can be attempted at all."""
+    engine = active_engine()
+    if engine == ENGINE_RULES:
+        return False
     try:
-        _get_client()
+        _get_openai_client() if engine == ENGINE_OPENAI else _get_client()
         return True
     except LLMUnavailable:
         return False
@@ -107,7 +251,16 @@ def complete_json(
     Adaptive thinking is on: these are judgement tasks — reading an agreement for
     ambiguity, weighing two accounts of a dispute — and they are exactly what
     thinking improves.
+
+    OpenAI takes the same system prompt and the same schema; only the
+    transport differs, so nothing above this layer knows which engine
+    answered except through `LLMResult.engine`.
     """
+    if active_engine() == ENGINE_OPENAI:
+        return _openai_json(
+            system=system, prompt=prompt, schema=schema, max_tokens=max_tokens
+        )
+
     client = _get_client()
 
     try:
@@ -169,6 +322,9 @@ def complete_text(
     for a person to read, and forcing it through a schema would only make it
     stilted.
     """
+    if active_engine() == ENGINE_OPENAI:
+        return _openai_text(system=system, prompt=prompt, max_tokens=max_tokens)
+
     client = _get_client()
 
     try:
@@ -203,6 +359,8 @@ def complete_text(
 
 def reset_client_cache() -> None:
     """Used by tests to re-evaluate configuration."""
-    global _client, _client_checked
+    global _client, _client_checked, _openai_client, _openai_checked
     _client = None
     _client_checked = False
+    _openai_client = None
+    _openai_checked = False
