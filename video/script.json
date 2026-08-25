@@ -1,0 +1,113 @@
+{
+  "_note": "Each segment is one narration line plus the footage it plays over. `src` is 'app' (the screen recording, with a start time in seconds) or 'slide' (a rendered deck slide by number). Audio duration drives the cut length, so the voice never runs past its picture.",
+  "segments": [
+    {
+      "id": "01",
+      "src": "slide",
+      "slide": 1,
+      "text": "TrustPay. A payment system for work where neither side wants to go first."
+    },
+    {
+      "id": "02",
+      "src": "app",
+      "start": 5.5,
+      "text": "It opens on the promise the whole product has to keep. Your money, protected."
+    },
+    {
+      "id": "03",
+      "src": "app",
+      "start": 15.0,
+      "text": "You create an account, and a wallet is opened for you automatically."
+    },
+    {
+      "id": "04",
+      "src": "app",
+      "start": 78.0,
+      "text": "This is running against a live server. Real accounts, a real database, real rules."
+    },
+    {
+      "id": "05",
+      "src": "slide",
+      "slide": 3,
+      "text": "Here is the idea. A bank transfer moves money and carries none of the conditions around it. No milestone. No definition of done. No approval step. TrustPay puts those conditions inside the payment. Money enters a protected state and stays there until the work is approved."
+    },
+    {
+      "id": "06",
+      "src": "app",
+      "start": 89.0,
+      "text": "Every account gets a Trust Score."
+    },
+    {
+      "id": "07",
+      "src": "app",
+      "start": 94.0,
+      "text": "Seventy-two out of a hundred, medium risk. But a score you cannot question is just a number, so every point is accounted for."
+    },
+    {
+      "id": "08",
+      "src": "app",
+      "start": 99.0,
+      "text": "Normal activity, consistent amounts, no cancellations. Against that: vague milestone criteria, little history, a very new account."
+    },
+    {
+      "id": "09",
+      "src": "app",
+      "start": 104.0,
+      "text": "It even says its own confidence is limited. The score is there to inform you. It never blocks a payment on its own."
+    },
+    {
+      "id": "10",
+      "src": "app",
+      "start": 113.0,
+      "text": "A project sets out the work. You define each milestone, what it covers, and what counts as finished."
+    },
+    {
+      "id": "11",
+      "src": "app",
+      "start": 121.0,
+      "text": "That completion criteria field is deliberate. Vague conditions are the most common cause of disputes."
+    },
+    {
+      "id": "12",
+      "src": "app",
+      "start": 133.0,
+      "text": "The wallet separates money into what is available, what is protected, and what is settling."
+    },
+    {
+      "id": "13",
+      "src": "app",
+      "start": 139.0,
+      "text": "Balances stay hidden until you unlock them with a fingerprint."
+    },
+    {
+      "id": "14",
+      "src": "app",
+      "start": 141.0,
+      "text": "Withdrawals go to a bank account or a UPI ID. The app checks the IFSC against the live bank registry, and it will not call an account verified until a payment provider has confirmed it belongs to you."
+    },
+    {
+      "id": "15",
+      "src": "app",
+      "start": 155.0,
+      "text": "There is an assistant for the questions people actually ask."
+    },
+    {
+      "id": "16",
+      "src": "app",
+      "start": 159.0,
+      "text": "Where is my payment? It answers from your own data, and it is labelled as AI generated, because a decision about money should not come from a model."
+    },
+    {
+      "id": "17",
+      "src": "slide",
+      "slide": 14,
+      "text": "A traditional payment is send, then receive. TrustPay is agree, define, protect, work, verify, release. That chain is the product."
+    },
+    {
+      "id": "18",
+      "src": "slide",
+      "slide": 15,
+      "text": "TrustPay. Trust, protected."
+    }
+  ]
+}

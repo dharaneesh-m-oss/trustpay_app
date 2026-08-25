@@ -73,3 +73,12 @@ dist/*
 deck/node_modules/
 deck/*.pdf
 deck/slide-*.jpg
+
+# Video build artefacts
+video/parts/
+video/audio/
+video/screen.mp4
+video/silent.mp4
+video/voice.wav
+video/*.jpg
+video/*.pdf

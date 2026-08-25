@@ -1,0 +1,30 @@
+[Script Info]
+ScriptType: v4.00+
+PlayResX: 1920
+PlayResY: 1080
+WrapStyle: 2
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, OutlineColour, BackColour, Bold, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV
+Style: Cap,Arial,38,&H00FFFFFF,&H00000000,&HC8000000,0,3,12,0,2,140,140,34
+
+[Events]
+Format: Layer, Start, End, Style, Text
+Dialogue: 0,0:00:00.00,0:00:05.99,Cap,TrustPay. A payment system for work where neither side wants to go first.
+Dialogue: 0,0:00:06.09,0:00:12.46,Cap,It opens on the promise the whole product has to keep. Your money,\Nprotected.
+Dialogue: 0,0:00:12.56,0:00:17.32,Cap,You create an account, and a wallet is opened for you automatically.
+Dialogue: 0,0:00:17.42,0:00:24.61,Cap,This is running against a live server. Real accounts, a real database,\Nreal rules.
+Dialogue: 0,0:00:24.71,0:00:45.64,Cap,Here is the idea. A bank transfer moves money and carries none of the\Nconditions around it. No milestone. No definition of done. No approval\Nstep. TrustPay puts those conditions inside the payment. Money enters a
+Dialogue: 0,0:00:45.74,0:00:48.72,Cap,Every account gets a Trust Score.
+Dialogue: 0,0:00:48.82,0:00:58.44,Cap,Seventy-two out of a hundred, medium risk. But a score you cannot question\Nis just a number, so every point is accounted for.
+Dialogue: 0,0:00:58.54,0:01:10.17,Cap,Normal activity, consistent amounts, no cancellations. Against that: vague\Nmilestone criteria, little history, a very new account.
+Dialogue: 0,0:01:10.27,0:01:18.96,Cap,It even says its own confidence is limited. The score is there to inform\Nyou. It never blocks a payment on its own.
+Dialogue: 0,0:01:19.06,0:01:27.23,Cap,A project sets out the work. You define each milestone, what it covers,\Nand what counts as finished.
+Dialogue: 0,0:01:27.33,0:01:34.84,Cap,That completion criteria field is deliberate. Vague conditions are the\Nmost common cause of disputes.
+Dialogue: 0,0:01:34.94,0:01:41.13,Cap,The wallet separates money into what is available, what is protected, and\Nwhat is settling.
+Dialogue: 0,0:01:41.23,0:01:45.44,Cap,Balances stay hidden until you unlock them with a fingerprint.
+Dialogue: 0,0:01:45.54,0:01:59.07,Cap,Withdrawals go to a bank account or a UPI ID. The app checks the IFSC\Nagainst the live bank registry, and it will not call an account verified\Nuntil a payment provider has confirmed it belongs to you.
+Dialogue: 0,0:01:59.17,0:02:03.40,Cap,There is an assistant for the questions people actually ask.
+Dialogue: 0,0:02:03.50,0:02:13.70,Cap,Where is my payment? It answers from your own data, and it is labelled as\NAI generated, because a decision about money should not come from a model.
+Dialogue: 0,0:02:13.80,0:02:26.44,Cap,A traditional payment is send, then receive. TrustPay is agree, define,\Nprotect, work, verify, release. That chain is the product.
+Dialogue: 0,0:02:26.54,0:02:30.68,Cap,TrustPay. Trust, protected.
